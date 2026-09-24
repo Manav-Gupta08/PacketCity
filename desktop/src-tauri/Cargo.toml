@@ -1,0 +1,28 @@
+[package]
+name = "packetcity-desktop"
+description = "PacketCity desktop application (Tauri shell)"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+build = "build.rs"
+
+[[bin]]
+name = "packetcity"
+path = "src/main.rs"
+# Shell wiring only; logic is tested in packetcity-core / packetcity-capture.
+test = false
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+packetcity-core.workspace = true
+packetcity-capture.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+log.workspace = true
+tauri = { version = "2", features = [] }
+env_logger = "0.11"
+tauri-plugin-dialog = "2"
