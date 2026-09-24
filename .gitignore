@@ -1,0 +1,19 @@
+/target
+/node_modules
+/frontend/dist
+/.deps
+*.pcap
+*.pcapng
+!/tests/fixtures/**/*.pcap
+!/tests/fixtures/**/*.pcapng
+desktop/src-tauri/gen/schemas
+
+# Local editor/OS/tooling state
+/.vscode
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+*.log
+.env
+.env.*

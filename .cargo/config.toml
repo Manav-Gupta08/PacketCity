@@ -1,0 +1,5 @@
+[env]
+# The pcap crate otherwise probes the *build machine's* libpcap and silently falls back to the 1.0
+# API when none is found (e.g. CI, or Npcap not yet installed), which disables real immediate mode.
+# 1.9.1 is the newest API level the crate distinguishes; Npcap >= 1.0 and current Linux/macOS meet it.
+LIBPCAP_VER = "1.9.1"
