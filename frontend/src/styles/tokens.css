@@ -1,0 +1,35 @@
+:root {
+  /* Surfaces */
+  --bg-0: #04060c;
+  --bg-1: #070b16;
+  --glass: rgba(11, 17, 33, 0.66);
+  --glass-strong: rgba(13, 20, 40, 0.86);
+  --line: rgba(130, 170, 255, 0.14);
+  --line-strong: rgba(130, 190, 255, 0.28);
+
+  /* Text */
+  --text: #e6ecff;
+  --text-dim: #93a0c3;
+  --text-faint: #5d6a8c;
+
+  /* Signal colours — used for meaning, not decoration */
+  --cyan: #00e5ff;
+  --blue: #3d7bff;
+  --magenta: #ff2ea6;
+  --violet: #9b5cff;
+  --alert: #ff6a3d;
+  --warn: #ffb020;
+  --ok: #3dffb5;
+
+  --incoming: var(--magenta);
+  --outgoing: var(--cyan);
+
+  --radius: 10px;
+  --radius-sm: 6px;
+  --blur: 14px;
+
+  --font-ui: "Segoe UI Variable", "Segoe UI", "Inter", system-ui, sans-serif;
+  --font-mono: "Cascadia Code", "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+
+  color-scheme: dark;
+}
