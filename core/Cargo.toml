@@ -1,0 +1,16 @@
+[package]
+name = "packetcity-core"
+description = "Packet parsing, flow tracking, statistics and traffic events for PacketCity"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+serde.workspace = true
+log.workspace = true
+crossbeam-channel.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
