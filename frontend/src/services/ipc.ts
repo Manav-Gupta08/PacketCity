@@ -46,4 +46,5 @@ export const api = {
   getFlow: (id: number) => invoke<FlowSnapshot | null>("get_flow", { id }),
   setPayloadCapture: (enabled: boolean) => invoke<void>("set_payload_capture", { enabled }),
   getPacketBytes: (id: number) => invoke<number[] | null>("get_packet_bytes", { id }),
+  exportPcap: (path: string) => invoke<number>("export_pcap", { path }),
 };

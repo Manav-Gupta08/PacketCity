@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { api, toCommandError } from "../services/ipc";
+import { exportKeptPackets } from "../services/session";
 import { DEMO_RATE_KEY, setApp, useApp } from "../stores/appStore";
 
 const DEMO_PRESETS = [120, 1_000, 5_000, 10_000];
@@ -19,7 +20,9 @@ export function SettingsView() {
   const demoRate = useApp((s) => s.demoRate);
   const env = useApp((s) => s.environment);
   const payloadCapture = useApp((s) => s.payloadCapture);
+  const hasSession = useApp((s) => s.session !== null && s.phase !== "idle");
   const [custom, setCustom] = useState("");
+  const [exported, setExported] = useState<string | null>(null);
 
   const setRate = (rate: number) => {
     if (!Number.isFinite(rate) || rate <= 0) return;
@@ -68,7 +71,8 @@ export function SettingsView() {
           <p className="muted">
             When on, the raw bytes of the most recent 5,000 packets are kept in memory so the inspector can show a hex dump.
             This includes <b>payload contents</b> (anything unencrypted: HTTP bodies, DNS, cookies on plain HTTP). Bytes are
-            never written to disk, are discarded as soon as you turn this off, and the setting resets to off at every launch.
+            only written to disk if you export them below, are discarded as soon as you turn this off, and the setting resets
+            to off at every launch.
           </p>
           <div className="setting__row">
             <button className={`chip ${payloadCapture ? "" : "is-on"}`} onClick={() => void setPayloadCapture(false)} aria-pressed={!payloadCapture}>
@@ -81,6 +85,25 @@ export function SettingsView() {
         </section>
 
         <section className="setting">
+          <h4>Export to PCAP</h4>
+          <p className="muted">
+            Saves the packets currently kept in memory (up to the last 5,000, oldest first) as a standard <span className="mono">.pcap</span>{" "}
+            file that Wireshark, tcpdump or PacketCity's own PCAP Viewer can open. Requires packet bytes to be on.
+          </p>
+          <div className="setting__row">
+            <button
+              className="btn btn--glass"
+              disabled={!payloadCapture || !hasSession}
+              onClick={() => void exportKeptPackets().then((msg) => msg && setExported(msg))}
+              title={!payloadCapture ? "Turn on packet bytes first" : !hasSession ? "Start a capture first" : "Choose where to save"}
+            >
+              Export kept packets…
+            </button>
+            {exported && <span className="muted mono wrap">{exported}</span>}
+          </div>
+        </section>
+
+        <section className="setting">
           <h4>Privacy</h4>
           <ul className="setting__list">
             <li>Captured traffic never leaves this computer: no cloud services, no uploads, no telemetry.</li>
@@ -89,7 +112,7 @@ export function SettingsView() {
                 ? "Packet bytes are currently being kept in memory for the hex view (see above)."
                 : "Payload bytes are not stored. Only header metadata is kept, plus DNS names, TLS server names and HTTP method/host/path (query strings dropped)."}
             </li>
-            <li>The inspector keeps the most recent 50,000 packets in memory; nothing is written to disk.</li>
+            <li>The inspector keeps the most recent 50,000 packets in memory; nothing is written to disk unless you export it.</li>
             <li>Capture files opened in the PCAP Viewer are read locally and are not modified.</li>
           </ul>
         </section>

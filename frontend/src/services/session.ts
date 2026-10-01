@@ -102,6 +102,24 @@ export async function openCaptureFile(): Promise<void> {
   if (ok) setApp({ view: "global" });
 }
 
+/** Asks where to save, then writes the packets kept for the hex view as a pcap. */
+export async function exportKeptPackets(): Promise<string | null> {
+  const { save } = await import("@tauri-apps/plugin-dialog");
+  const path = await save({
+    title: "Export kept packets",
+    defaultPath: "packetcity-export.pcap",
+    filters: [{ name: "Packet capture", extensions: ["pcap"] }],
+  });
+  if (!path) return null;
+  try {
+    const count = await api.exportPcap(path);
+    return `Exported ${count.toLocaleString()} packets to ${path}`;
+  } catch (e) {
+    setApp({ error: toCommandError(e) });
+    return null;
+  }
+}
+
 async function start(begin: (onMessage: (msg: StreamMessage) => void) => Promise<SessionInfo>): Promise<boolean> {
   const token = ++activeToken;
   resetForNewSession();
