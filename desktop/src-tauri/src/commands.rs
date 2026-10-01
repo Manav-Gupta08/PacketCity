@@ -1,4 +1,5 @@
 use packetcity_capture::{CaptureEnvironment, InterfaceInfo};
+use packetcity_core::capture_file::write_pcap;
 use packetcity_core::flows::FlowSnapshot;
 use packetcity_core::pipeline::StreamMessage;
 use packetcity_core::replay::ReplayStatus;
@@ -8,7 +9,7 @@ use tauri::ipc::Channel;
 use tauri::State;
 
 use crate::error::CommandError;
-use crate::session::{validate_capture_path, AppState, LiveCaptureOptions, SessionInfo};
+use crate::session::{validate_capture_path, validate_export_path, AppState, LiveCaptureOptions, SessionInfo};
 use crate::sink::ChannelSink;
 
 #[tauri::command]
@@ -107,4 +108,24 @@ pub fn get_packet_bytes(state: State<'_, AppState>, id: u64) -> Option<Vec<u8>> 
     let engine = state.engine()?;
     let guard = engine.lock().ok()?;
     guard.packet_bytes(id).map(<[u8]>::to_vec)
+}
+
+/// Writes the frames kept by payload capture to a classic pcap file; returns how many.
+#[tauri::command(async)]
+pub fn export_pcap(state: State<'_, AppState>, path: String) -> Result<usize, CommandError> {
+    let path = validate_export_path(&path)?;
+    let engine = state.engine().ok_or_else(|| CommandError::internal("No session is active."))?;
+    let (link, frames) = {
+        let guard = engine.lock().map_err(|_| CommandError::internal("Engine is unavailable."))?;
+        (guard.link(), guard.kept_frames())
+    };
+    if frames.is_empty() {
+        return Err(CommandError {
+            code: "nothingToExport",
+            message: "No packet bytes have been kept yet.".into(),
+            hint: Some("Enable \"Keep packet bytes\" in Settings, let some traffic arrive, then export."),
+        });
+    }
+    std::fs::write(&path, write_pcap(link.linktype(), &frames)).map_err(|e| CommandError::internal(format!("Could not write {}: {e}", path.display())))?;
+    Ok(frames.len())
 }

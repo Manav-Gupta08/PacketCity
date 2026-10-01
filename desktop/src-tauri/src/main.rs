@@ -30,6 +30,7 @@ fn main() {
             commands::get_flow,
             commands::set_payload_capture,
             commands::get_packet_bytes,
+            commands::export_pcap,
         ])
         .build(tauri::generate_context!())
         .expect("failed to build PacketCity");

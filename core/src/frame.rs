@@ -27,6 +27,17 @@ impl LinkType {
             _ => None,
         }
     }
+
+    /// LINKTYPE_* value for writing capture files.
+    pub fn linktype(self) -> u32 {
+        match self {
+            Self::Null => 0,
+            Self::Ethernet => 1,
+            Self::RawIp => 101,
+            Self::Loop => 108,
+            Self::LinuxSll => 113,
+        }
+    }
 }
 
 /// One captured frame as delivered by any capture source (live, PCAP replay, demo).

@@ -303,3 +303,13 @@ pub fn validate_capture_path(path: &str) -> Result<PathBuf, CommandError> {
     }
     Ok(p.to_path_buf())
 }
+
+/// Export targets must be absolute `.pcap` paths in an existing directory.
+pub fn validate_export_path(path: &str) -> Result<PathBuf, CommandError> {
+    let p = Path::new(path);
+    let ok_ext = p.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("pcap"));
+    if !p.is_absolute() || !ok_ext || !p.parent().is_some_and(Path::is_dir) || p.is_dir() {
+        return Err(CommandError { code: "invalidPath", message: "Choose a .pcap file in an existing folder.".into(), hint: None });
+    }
+    Ok(p.to_path_buf())
+}

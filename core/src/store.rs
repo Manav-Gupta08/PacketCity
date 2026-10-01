@@ -60,6 +60,10 @@ impl FrameBytesStore {
     pub fn get(&self, id: PacketId) -> Option<&[u8]> {
         self.slots[self.slot(id)].as_ref().filter(|(i, _)| *i == id).map(|(_, b)| &**b)
     }
+
+    pub fn iter(&self) -> impl Iterator<Item = (PacketId, &[u8])> {
+        self.slots.iter().flatten().map(|(id, b)| (*id, &**b))
+    }
 }
 
 #[cfg(test)]

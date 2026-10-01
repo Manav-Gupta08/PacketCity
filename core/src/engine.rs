@@ -180,6 +180,21 @@ impl Engine {
         self.frame_bytes.as_ref()?.get(id)
     }
 
+    /// Frames kept by payload capture, oldest first, for export. Frames whose metadata has left
+    /// the packet ring are skipped because their timestamp is unknown.
+    pub fn kept_frames(&self) -> Vec<RawFrame> {
+        let Some(bytes) = self.frame_bytes.as_ref() else { return Vec::new() };
+        let mut frames: Vec<(PacketId, RawFrame)> = bytes
+            .iter()
+            .filter_map(|(id, data)| {
+                let rec = self.store.get(id)?;
+                Some((id, RawFrame { timestamp_us: rec.timestamp_us, wire_len: rec.packet.wire_len.max(data.len() as u32), data: data.to_vec() }))
+            })
+            .collect();
+        frames.sort_unstable_by_key(|(id, _)| *id);
+        frames.into_iter().map(|(_, f)| f).collect()
+    }
+
     fn update_alerts(&mut self, packet: &ParsedPacket, ts: u64) {
         let devices = &self.devices;
         if let Some(scanner) = self.alerts.observe_packet(packet, ts, &|ip| devices.is_on_link(ip)) {
@@ -403,6 +418,19 @@ mod tests {
         let threats: Vec<_> = e.take_batch().events.iter().map(|ev| ev.threat).collect();
         assert!(threats[..19].iter().all(Option::is_none), "below the threshold nothing is known yet");
         assert!(threats[19..].iter().all(|t| *t == Some(ThreatKind::Scanner)));
+    }
+
+    #[test]
+    fn kept_frames_export_in_order() {
+        let mut e = engine();
+        e.set_payload_capture(true);
+        let frames: Vec<Vec<u8>> = (0..3u16).map(|i| synth::udp_frame(&ep(), 5000 + i, 53, &synth::dns_query(i, "x.example", 1))).collect();
+        for (i, f) in frames.iter().enumerate() {
+            e.ingest(&frame(f.clone(), 10 + i as u64));
+        }
+        let kept = e.kept_frames();
+        assert_eq!(kept.iter().map(|f| f.timestamp_us).collect::<Vec<_>>(), vec![10, 11, 12]);
+        assert_eq!(kept[2].data, frames[2]);
     }
 
     #[test]
