@@ -15,6 +15,8 @@ const UNFOCUSED_DIM = 0.16;
 /** Hostile cars get a wider, pulsing road glow so they read as an alarm, not just a colour. */
 const THREAT_GLOW_SPREAD = 1.5;
 const THREAT_PULSE_HZ = 1.6;
+/** Half the distance over which road slope is measured for a car's pitch. */
+const SLOPE_PROBE = 4;
 
 interface ModelMesh {
   mesh: THREE.InstancedMesh;
@@ -36,6 +38,11 @@ export class Fleet {
   private readonly p = new THREE.Vector3();
   private readonly s = new THREE.Vector3();
   private readonly up = new THREE.Vector3(0, 1, 0);
+  /** Car models point along +x, so nose-up pitch is a rotation about local +z. */
+  private readonly forwardNormal = new THREE.Vector3(0, 0, 1);
+  private readonly qPitch = new THREE.Quaternion();
+  private ground: (x: number, z: number) => number = () => 0;
+  private hasRamps = false;
   private readonly colors = new Map<string, THREE.Color>();
   private readonly threatTint = new THREE.Color(THREAT_COLOR);
   private readonly threatGlow = new THREE.Color(THREAT_COLOR);
@@ -78,6 +85,12 @@ export class Fleet {
     this.group.add(this.selection);
   }
 
+  /** Road surface height lookup for the current scene (elevated roads). */
+  setGround(ground: (x: number, z: number) => number, hasRamps: boolean): void {
+    this.ground = ground;
+    this.hasRamps = hasRamps;
+  }
+
   private tint(cls: string, hex: number): THREE.Color {
     let c = this.colors.get(cls);
     if (!c) this.colors.set(cls, (c = new THREE.Color(hex)));
@@ -115,9 +128,18 @@ export class Fleet {
       }
       const sx = len / MODEL_LENGTH[model];
       const sw = Math.min(sx, MAX_WIDTH_SCALE);
+      const gx = pool.gx[i]!;
+      const gz = pool.gy[i]!;
+      const ground = this.ground(gx, gz);
       this.q.setFromAxisAngle(this.up, this.yaw[i]!);
+      if (this.hasRamps) {
+        const fx = Math.cos(pool.angle[i]!) * SLOPE_PROBE;
+        const fz = Math.sin(pool.angle[i]!) * SLOPE_PROBE;
+        const pitch = Math.atan((this.ground(gx + fx, gz + fz) - this.ground(gx - fx, gz - fz)) / (2 * SLOPE_PROBE));
+        this.q.multiply(this.qPitch.setFromAxisAngle(this.forwardNormal, pitch));
+      }
       // A slight bob sells suspension without costing anything.
-      this.p.set(pool.gx[i]!, ROAD_Y + Math.sin(time * 6 + i) * 0.08, pool.gy[i]!);
+      this.p.set(gx, ground + ROAD_Y + Math.sin(time * 6 + i) * 0.08, gz);
       this.s.set(sx, sw, sw);
       this.m4.compose(this.p, this.q, this.s);
       const n = mm.count++;
@@ -132,7 +154,7 @@ export class Fleet {
 
       const spread = threat ? THREAT_GLOW_SPREAD : 1;
       this.s.set(len * (threat ? 1.15 : 1), 1, MODEL_WIDTH[model] * sw * spread);
-      this.m4.compose(this.p.setY(0), this.q, this.s);
+      this.m4.compose(this.p.setY(ground), this.q, this.s);
       this.glow.setMatrixAt(glowN, this.m4);
       this.glow.setColorAt(glowN, !threat ? tint : high ? this.threatGlow : this.mediumGlow);
       this.glowDim.setX(glowN, dim);
@@ -157,7 +179,7 @@ export class Fleet {
     this.selection.visible = selected >= 0;
     if (selected >= 0) {
       const r = pool.length[selected]! * 0.75 + 6;
-      this.selection.position.set(pool.gx[selected]!, ROAD_Y + 0.3, pool.gy[selected]!);
+      this.selection.position.set(pool.gx[selected]!, this.ground(pool.gx[selected]!, pool.gy[selected]!) + ROAD_Y + 0.3, pool.gy[selected]!);
       this.selection.scale.setScalar(r * (1 + 0.06 * Math.sin(time * 6)));
     }
   }

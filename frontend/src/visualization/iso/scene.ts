@@ -16,6 +16,52 @@ export interface RoadSpec {
   median?: number;
   /** Directional arrows + lane lighting: [colour of traffic along from→to, colour of traffic against]. */
   flowTints?: [number, number];
+  /** Raised deck on pillars; absent = ground level. */
+  elevation?: Elevation;
+}
+
+/** Deck height profile along a road: climbs over `rampIn` from `from`, descends over `rampOut` to `to`. */
+export interface Elevation {
+  height: number;
+  /** 0 = already at full height where the road starts (e.g. a skybridge leaving a flyover). */
+  rampIn: number;
+  rampOut: number;
+}
+
+const smoothstep = (t: number): number => {
+  const c = Math.min(1, Math.max(0, t));
+  return c * c * (3 - 2 * c);
+};
+
+/** Deck height at distance `s` along a road of length `len`. */
+export function profileHeight(e: Elevation, s: number, len: number): number {
+  const up = e.rampIn > 0 ? smoothstep(s / e.rampIn) : 1;
+  const down = e.rampOut > 0 ? smoothstep((len - s) / e.rampOut) : 1;
+  return e.height * Math.min(up, down);
+}
+
+/** Road surface height at a ground point; 0 away from elevated roads. */
+export function groundHeightFn(roads: readonly RoadSpec[]): (x: number, y: number) => number {
+  const raised = roads
+    .filter((r) => r.elevation)
+    .map((r) => {
+      const dx = r.to.x - r.from.x;
+      const dy = r.to.y - r.from.y;
+      return { r, dx, dy, len: Math.hypot(dx, dy) || 1 };
+    });
+  if (raised.length === 0) return () => 0;
+  return (x, y) => {
+    let h = 0;
+    for (const { r, dx, dy, len } of raised) {
+      const px = x - r.from.x;
+      const py = y - r.from.y;
+      const s = (px * dx + py * dy) / len;
+      if (s < -1 || s > len + 1) continue;
+      if (Math.abs(px * dy - py * dx) / len > r.width / 2 + 1) continue;
+      h = Math.max(h, profileHeight(r.elevation!, s, len));
+    }
+    return h;
+  };
 }
 
 export type BuildingKind = "self" | "router" | "internet" | "device" | "overflow" | "destination" | "decor";

@@ -1,6 +1,7 @@
 import * as THREE from "three";
 
 import type { PlazaSpec, RoadSpec, SceneModel } from "../iso/scene";
+import { groundHeightFn, profileHeight } from "../iso/scene";
 import { Batches, box, glowMaterial, groundBox, groundQuad, worldUV } from "./geom";
 
 export const ROAD_Y = 0.6;
@@ -11,6 +12,36 @@ const LAMP_HEIGHT = 30;
 const DASH = 14;
 const GAP = 16;
 const BARRIER_H = 2.6;
+/** Long pieces of an elevated road are cut this short so they can bend over the ramps. */
+const DECK_SEGMENT = 12;
+const DECK_THICKNESS = 4;
+const DECK_OVERHANG = 5;
+const PILLAR_SPACING = 80;
+const PILLAR_SIZE = 6;
+/** Below this deck height a ramp rests on an embankment rather than pillars. */
+const PILLAR_MIN_HEIGHT = 8;
+
+interface Sink {
+  add(material: THREE.Material, geometry: THREE.BufferGeometry): void;
+}
+
+const segmentsFor = (r: RoadSpec, len: number): number => (r.elevation ? Math.max(1, Math.ceil(len / DECK_SEGMENT)) : 1);
+
+/** Forwards geometry to `b` after raising every vertex to the road's deck height at that point. */
+function lifted(b: Batches, r: RoadSpec, u: THREE.Vector2, len: number): Sink {
+  const e = r.elevation!;
+  return {
+    add(material, g) {
+      const pos = g.getAttribute("position") as THREE.BufferAttribute;
+      for (let i = 0; i < pos.count; i++) {
+        const s = (pos.getX(i) - r.from.x) * u.x + (pos.getZ(i) - r.from.y) * u.y;
+        pos.setY(i, pos.getY(i) + profileHeight(e, s, len));
+      }
+      g.computeVertexNormals();
+      b.add(material, g);
+    },
+  };
+}
 
 export interface RoadTextures {
   asphalt: THREE.Texture;
@@ -65,23 +96,56 @@ function tinted(map: Map<number, THREE.MeshBasicMaterial>, color: number, make: 
 }
 
 /** Dashed line along a road at lateral offset `off`. */
-function dashes(b: Batches, m: THREE.Material, r: RoadSpec, u: THREE.Vector2, n: THREE.Vector2, len: number, off: number, width = 1): void {
+function dashes(b: Sink, m: THREE.Material, r: RoadSpec, u: THREE.Vector2, n: THREE.Vector2, len: number, off: number, width = 1): void {
   for (let s = 10; s + DASH < len - 10; s += DASH + GAP) {
     const c = s + DASH / 2;
     b.add(m, groundQuad(r.from.x + u.x * c + n.x * off, MARK_Y, r.from.y + u.y * c + n.y * off, u.x, u.y, DASH, width));
   }
 }
 
-function solid(b: Batches, m: THREE.Material, r: RoadSpec, u: THREE.Vector2, n: THREE.Vector2, len: number, off: number, width = 0.9, y = MARK_Y): void {
+function solid(b: Sink, m: THREE.Material, r: RoadSpec, u: THREE.Vector2, n: THREE.Vector2, len: number, off: number, width = 0.9, y = MARK_Y): void {
   const c = len / 2;
-  b.add(m, groundQuad(r.from.x + u.x * c + n.x * off, y, r.from.y + u.y * c + n.y * off, u.x, u.y, len, width));
+  b.add(m, groundQuad(r.from.x + u.x * c + n.x * off, y, r.from.y + u.y * c + n.y * off, u.x, u.y, len, width, segmentsFor(r, len)));
 }
 
-function road(b: Batches, m: Mats, r: RoadSpec, tex: RoadTextures): void {
+/** Concrete deck under an elevated road, neon trim along its underside, and pillars down to the ground. */
+function deck(b: Batches, top: Sink, m: Mats, r: RoadSpec, u: THREE.Vector2, n: THREE.Vector2, len: number, edge: THREE.Material): void {
+  const e = r.elevation!;
+  const cx = (r.from.x + r.to.x) / 2;
+  const cz = (r.from.y + r.to.y) / 2;
+  const deckW = r.width + 2 * DECK_OVERHANG;
+  const seg = segmentsFor(r, len);
+  top.add(m.concrete, groundBox(cx, cz, u.x, u.y, len, deckW, -DECK_THICKNESS, DECK_THICKNESS, 0, seg));
+  for (const side of [-1, 1]) {
+    const off = side * (deckW / 2);
+    top.add(edge, groundBox(cx + n.x * off, cz + n.y * off, u.x, u.y, len, 0.35, -DECK_THICKNESS * 0.6, 0.35, 0, seg));
+  }
+  const twin = r.width > 40;
+  const spacing = Math.min(PILLAR_SPACING, len);
+  for (let s = spacing / 2; s < len; s += spacing) {
+    const h = profileHeight(e, s, len) - DECK_THICKNESS;
+    if (h + DECK_THICKNESS < PILLAR_MIN_HEIGHT) continue;
+    const px = r.from.x + u.x * s;
+    const pz = r.from.y + u.y * s;
+    for (const lat of twin ? [-r.width * 0.28, r.width * 0.28] : [0]) {
+      b.add(m.concrete, groundBox(px + n.x * lat, pz + n.y * lat, u.x, u.y, PILLAR_SIZE, PILLAR_SIZE, 0, h));
+    }
+    b.add(m.concrete, groundBox(px, pz, n.x, n.y, r.width * 0.8, PILLAR_SIZE * 0.9, h - 3, 3));
+    b.add(edge, groundBox(px, pz, n.x, n.y, r.width * 0.8 + 0.4, 0.3, h - 1.6, 0.3));
+  }
+}
+
+function road(b: Batches, m: Mats, r: RoadSpec, tex: RoadTextures, overhead: (x: number, y: number) => number): void {
   const dir = new THREE.Vector2(r.to.x - r.from.x, r.to.y - r.from.y);
   const len = dir.length();
   if (len < 1) return;
   const u = dir.divideScalar(len);
+  const out: Sink = r.elevation ? lifted(b, r, u, len) : b;
+  roadSurface(b, out, m, r, tex, u, len, r.elevation ? () => 0 : overhead);
+}
+
+function roadSurface(raw: Batches, b: Sink, m: Mats, r: RoadSpec, tex: RoadTextures, u: THREE.Vector2, len: number, overhead: (x: number, y: number) => number): void {
+  const seg = segmentsFor(r, len);
   // Right-hand normal (y-down ground plane): traffic along +u drives on the +n side.
   const n = new THREE.Vector2(-u.y, u.x);
   const cx = (r.from.x + r.to.x) / 2;
@@ -93,7 +157,8 @@ function road(b: Batches, m: Mats, r: RoadSpec, tex: RoadTextures): void {
   const edgeColor = r.tint;
   const edge = tinted(m.edge, edgeColor, () => glowMaterial(edgeColor, 1.3));
 
-  b.add(m.asphalt, groundBox(cx, cz, u.x, u.y, len + (r.style === "drive" ? 0 : r.width * 0.5), r.width, 0, ROAD_Y, ASPHALT_UV));
+  b.add(m.asphalt, groundBox(cx, cz, u.x, u.y, len + (r.style === "drive" ? 0 : r.width * 0.5), r.width, 0, ROAD_Y, ASPHALT_UV, seg));
+  if (r.elevation) deck(raw, b, m, r, u, n, len, edge);
 
   if (r.style !== "drive") {
     for (const side of [-1, 1]) {
@@ -103,8 +168,8 @@ function road(b: Batches, m: Mats, r: RoadSpec, tex: RoadTextures): void {
   }
 
   if (median > 0) {
-    b.add(m.concrete, groundBox(cx, cz, u.x, u.y, len, median * 0.55, ROAD_Y, 1.6));
-    b.add(edge, groundBox(cx, cz, u.x, u.y, len, 0.5, ROAD_Y + 1.6, 0.35));
+    b.add(m.concrete, groundBox(cx, cz, u.x, u.y, len, median * 0.55, ROAD_Y, 1.6, 0, seg));
+    b.add(edge, groundBox(cx, cz, u.x, u.y, len, 0.5, ROAD_Y + 1.6, 0.35, 0, seg));
   } else if (r.style === "street") {
     dashes(b, tinted(m.edge, 0xffb020, () => glowMaterial(0xffb020, 1.6)), r, u, n, len, 0, 0.9);
   }
@@ -114,14 +179,14 @@ function road(b: Batches, m: Mats, r: RoadSpec, tex: RoadTextures): void {
       const off = side * (half + 0.7);
       const ox = cx + n.x * off;
       const oz = cz + n.y * off;
-      b.add(m.concrete, groundBox(ox, oz, u.x, u.y, len, 1.4, 0, BARRIER_H));
-      b.add(edge, groundBox(ox, oz, u.x, u.y, len, 0.25, BARRIER_H, 0.25));
+      b.add(m.concrete, groundBox(ox, oz, u.x, u.y, len, 1.4, 0, BARRIER_H, 0, seg));
+      b.add(edge, groundBox(ox, oz, u.x, u.y, len, 0.25, BARRIER_H, 0.25, 0, seg));
     }
   } else if (r.style === "street") {
     for (const side of [-1, 1]) {
       const off = side * (half + 5);
-      b.add(m.concrete, groundBox(cx + n.x * off, cz + n.y * off, u.x, u.y, len, 10, 0, 1.1));
-      b.add(edge, groundBox(cx + n.x * side * (half + 0.2), cz + n.y * side * (half + 0.2), u.x, u.y, len, 0.3, 1.1, 0.25));
+      b.add(m.concrete, groundBox(cx + n.x * off, cz + n.y * off, u.x, u.y, len, 10, 0, 1.1, 0, seg));
+      b.add(edge, groundBox(cx + n.x * side * (half + 0.2), cz + n.y * side * (half + 0.2), u.x, u.y, len, 0.3, 1.1, 0.25, 0, seg));
     }
   } else {
     for (const side of [-1, 1]) solid(b, edge, r, u, n, len, side * (half - 0.5), 0.6, MARK_Y + 0.02);
@@ -159,6 +224,7 @@ function road(b: Batches, m: Mats, r: RoadSpec, tex: RoadTextures): void {
         const base = side * (half + (r.style === "highway" ? 3 : 7));
         const px = r.from.x + u.x * s + n.x * base;
         const pz = r.from.y + u.y * s + n.y * base;
+        if (overhead(px, pz) > 0 || overhead(px + n.x * side * -9, pz + n.y * side * -9) > 0) continue;
         b.add(m.metal, box(px, LAMP_HEIGHT / 2, pz, 1.2, LAMP_HEIGHT, 1.2));
         const arm = side * -9;
         const ax = px + n.x * arm / 2;
@@ -176,7 +242,7 @@ function road(b: Batches, m: Mats, r: RoadSpec, tex: RoadTextures): void {
 }
 
 /** Overhead sign gantry spanning the highway. */
-function gantry(b: Batches, m: Mats, r: RoadSpec, u: THREE.Vector2, n: THREE.Vector2, s: number, half: number, tint: number): void {
+function gantry(b: Sink, m: Mats, r: RoadSpec, u: THREE.Vector2, n: THREE.Vector2, s: number, half: number, tint: number): void {
   const px = r.from.x + u.x * s;
   const pz = r.from.y + u.y * s;
   const span = half * 2 + 12;
@@ -243,7 +309,8 @@ export function buildRoads(model: SceneModel, tex: RoadTextures, env: THREE.Text
   group.name = "roads";
   const m = materials(tex, env);
   const b = new Batches();
-  for (const r of model.roads) road(b, m, r, tex);
+  const overhead = groundHeightFn(model.roads);
+  for (const r of model.roads) road(b, m, r, tex, overhead);
   for (const p of model.plazas) plaza(b, m, p, group);
   b.build(group);
   return group;

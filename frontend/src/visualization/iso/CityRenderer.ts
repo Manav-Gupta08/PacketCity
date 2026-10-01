@@ -17,7 +17,7 @@ import { adTexture, arrowTexture, asphaltTexture, facadeTextures, glowTexture, g
 import { vehicleLength, vehicleSpeed } from "../vehicleStyles";
 import { buildRoute, type Route } from "./routes";
 import { FREE, RoutePool } from "./RoutePool";
-import type { Scene, SignSpec } from "./scene";
+import { groundHeightFn, type Scene, type SignSpec } from "./scene";
 
 const POOL_CAPACITY = 1200;
 /** Max events moved from the IPC bus into staging per frame. */
@@ -85,6 +85,7 @@ export class CityRenderer {
   private readonly pool = new RoutePool(POOL_CAPACITY, { accelDistance: 70, brakeDistance: 90, minFactor: 0.35 });
   private readonly staging = new ConvoyStaging(STAGING_MAX_KEYS);
   private scene: Scene | null = null;
+  private ground: (x: number, y: number) => number = () => 0;
   /** Route per lane id; lane ids are stable across scene rebuilds, routes are not. */
   private readonly laneRoutes = new Map<number, Route>();
   private readonly laneIds = new Map<string, number>();
@@ -339,6 +340,8 @@ export class CityRenderer {
     this.city = city;
     group.add(city.group);
     group.add(buildRoads(scene.model, tex, this.env));
+    this.ground = groundHeightFn(scene.model.roads);
+    this.fleet?.setGround(this.ground, scene.model.roads.some((r) => r.elevation));
 
     // Destination towers come and go with traffic; the background ignores them (the highway
     // corridor is kept clear instead) so it survives those rebuilds.
@@ -639,7 +642,7 @@ export class CityRenderer {
     let bestScore = Infinity;
     for (let i = 0; i < POOL_CAPACITY; i++) {
       if (p.state[i] === FREE) continue;
-      this.v.set(p.gx[i]!, ROAD_Y + 3, p.gy[i]!);
+      this.v.set(p.gx[i]!, this.ground(p.gx[i]!, p.gy[i]!) + ROAD_Y + 3, p.gy[i]!);
       const dist = this.camera.position.distanceTo(this.v);
       this.v.project(this.camera);
       if (this.v.z > 1) continue;

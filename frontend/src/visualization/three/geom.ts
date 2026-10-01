@@ -51,8 +51,9 @@ export function groundBox(
   y0: number,
   height: number,
   uvScale = 0,
+  segments = 1,
 ): THREE.BufferGeometry {
-  const g = new THREE.BoxGeometry(length, height, width);
+  const g = new THREE.BoxGeometry(length, height, width, segments);
   const angle = Math.atan2(-uz, ux);
   tmpMatrix.makeRotationY(angle).setPosition(cx, y0 + height / 2, cz);
   g.applyMatrix4(tmpMatrix);
@@ -62,8 +63,8 @@ export function groundBox(
 }
 
 /** Flat quad lying on the ground (facing up), oriented along (ux, uz). */
-export function groundQuad(cx: number, y: number, cz: number, ux: number, uz: number, length: number, width: number): THREE.BufferGeometry {
-  const g = new THREE.PlaneGeometry(length, width);
+export function groundQuad(cx: number, y: number, cz: number, ux: number, uz: number, length: number, width: number, segments = 1): THREE.BufferGeometry {
+  const g = new THREE.PlaneGeometry(length, width, segments);
   g.rotateX(-Math.PI / 2);
   g.rotateY(Math.atan2(-uz, ux));
   g.translate(cx, y, cz);

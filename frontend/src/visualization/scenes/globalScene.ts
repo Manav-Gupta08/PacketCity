@@ -37,12 +37,20 @@ const DEVICE_SIZE = 84;
 /** LAN devices shown as buildings; the rest share the "+N more" block. */
 export const MAX_DEVICE_BUILDINGS = 14;
 const BYTES_PER_HEIGHT_DECADE = 22;
-/** Destination towers line the internet highway in pairs, starting past the router. */
-const DEST_FIRST_Y = -HUB - 240;
+/** Destination towers line the internet highway in pairs, past the flyover's cross street. */
+const DEST_FIRST_Y = -HUB - 300;
 const DEST_SPACING = 140;
 const DEST_SIZE = 70;
 const DEST_DRIVE = 34;
 const HIGHWAY_HALF_WIDTH = (ROAD_WIDTH + 24) / 2;
+/** The internet highway climbs out of the interchange onto a flyover and stays elevated. */
+const FLYOVER_HEIGHT = 22;
+const FLYOVER_RAMP = 160;
+/** Ground-level street passing under the flyover (scenery; no traffic is routed on it). */
+const UNDERPASS_Y = -HUB - 215;
+const UNDERPASS_HALF_LENGTH = 230;
+/** Skybridges run past the door into the tower facade. */
+const SKYBRIDGE_REACH = 10;
 
 const HUB_POINT: Pt = { x: 0, y: 0 };
 
@@ -112,7 +120,8 @@ export function buildGlobalScene(devices: DeviceSnapshot[], destinations: readon
   const avenueEnd = junction(Math.max(columns, overflowColumn + 1) - 1).x + 110;
 
   const roads: RoadSpec[] = [
-    { from: { x: 0, y: -HUB }, to: { x: 0, y: -INTERNET_ROAD_END }, width: ROAD_WIDTH + 24, style: "highway", tint: TINT.cyan, lanesPerDirection: 2, median: 10, flowTints: [TINT.cyan, TINT.magenta] },
+    { from: { x: 0, y: -HUB }, to: { x: 0, y: -INTERNET_ROAD_END }, width: ROAD_WIDTH + 24, style: "highway", tint: TINT.cyan, lanesPerDirection: 2, median: 10, flowTints: [TINT.cyan, TINT.magenta], elevation: { height: FLYOVER_HEIGHT, rampIn: FLYOVER_RAMP, rampOut: 0 } },
+    { from: { x: -UNDERPASS_HALF_LENGTH, y: UNDERPASS_Y }, to: { x: UNDERPASS_HALF_LENGTH, y: UNDERPASS_Y }, width: 2 * LANE_WIDTH, style: "street", tint: TINT.violet, lanesPerDirection: 1 },
     { from: { x: -HUB, y: 0 }, to: { x: -SELF_ROAD_END, y: 0 }, width: ROAD_WIDTH, style: "street", tint: TINT.cyan, lanesPerDirection: 2 },
     { from: { x: HUB, y: 0 }, to: { x: avenueEnd, y: 0 }, width: ROAD_WIDTH, style: "street", tint: TINT.magenta, lanesPerDirection: 2 },
     { from: { x: 0, y: HUB }, to: { x: 0, y: BROADCAST_ROAD_END }, width: ROAD_WIDTH, style: "street", tint: TINT.violet, lanesPerDirection: 2 },
@@ -186,7 +195,7 @@ export function buildGlobalScene(devices: DeviceSnapshot[], destinations: readon
     const door: Pt = { x: side * (HIGHWAY_HALF_WIDTH + DEST_DRIVE), y };
     const gx = side * (HIGHWAY_HALF_WIDTH + DEST_DRIVE + DEST_SIZE / 2 + 8);
     const h = destinationHeight(dst.bytes);
-    roads.push({ from: { x: side * HIGHWAY_HALF_WIDTH, y }, to: door, width: 34, style: "drive", tint: TINT.amber, lanesPerDirection: 1 });
+    roads.push({ from: { x: side * HIGHWAY_HALF_WIDTH, y }, to: { x: side * (HIGHWAY_HALF_WIDTH + DEST_DRIVE + SKYBRIDGE_REACH), y }, width: 34, style: "drive", tint: TINT.amber, lanesPerDirection: 1, elevation: { height: FLYOVER_HEIGHT, rampIn: 0, rampOut: 0 } });
     buildings.push({ node: "internet", kind: "destination", gx, gy: y, w: DEST_SIZE, d: DEST_SIZE, h, tint: TINT.amber });
     signs.push({ id: `dest:${dst.name}`, text: dst.name, gx, gy: y, z: h + 24, axis: "flat", tone: "amber", size: "sm", node: "internet" });
     paths.set(`dest:${dst.name}`, [door, { x: 0, y }, HUB_POINT]);

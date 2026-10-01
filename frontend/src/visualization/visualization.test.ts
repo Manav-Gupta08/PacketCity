@@ -6,7 +6,7 @@ import { compileFilter, parseFilter } from "./filter";
 import { project, unproject, type Heading } from "./iso/projection";
 import { buildRoute, joinPaths, sampleRoute, type RouteSample } from "./iso/routes";
 import { ARRIVING, FOLLOW_GAP, FREE, RoutePool, TRAVELING } from "./iso/RoutePool";
-import { laneFor } from "./iso/scene";
+import { groundHeightFn, laneFor, profileHeight } from "./iso/scene";
 import { carriagewayFor } from "./lanes";
 import { buildGlobalScene, MAX_DEVICE_BUILDINGS } from "./scenes/globalScene";
 import { buildPersonalScene } from "./scenes/personalScene";
@@ -353,5 +353,38 @@ describe("threat severity", () => {
     expect(threatColor("bruteForce")).toBe(THREAT_COLOR);
     expect(threatColor("dnsTunnel")).toBe(THREAT_MEDIUM_COLOR);
     expect(threatColor("arpSpoof")).toBe(THREAT_MEDIUM_COLOR);
+  });
+});
+
+describe("elevated roads", () => {
+  const e = { height: 20, rampIn: 100, rampOut: 50 };
+
+  it("ramps smoothly up, holds, and ramps down", () => {
+    expect(profileHeight(e, 0, 400)).toBe(0);
+    expect(profileHeight(e, 50, 400)).toBeCloseTo(10);
+    expect(profileHeight(e, 200, 400)).toBe(20);
+    expect(profileHeight(e, 400, 400)).toBe(0);
+    expect(profileHeight({ height: 20, rampIn: 0, rampOut: 0 }, 0, 30)).toBe(20);
+  });
+
+  it("raises only points on an elevated deck", () => {
+    const ground = groundHeightFn([
+      { from: { x: 0, y: 0 }, to: { x: 0, y: -400 }, width: 40, style: "highway", tint: 0, lanesPerDirection: 2, elevation: e },
+      { from: { x: -100, y: -200 }, to: { x: 100, y: -200 }, width: 30, style: "street", tint: 0, lanesPerDirection: 1 },
+    ]);
+    expect(ground(10, -200)).toBe(20);
+    expect(ground(60, -200)).toBe(0);
+    expect(ground(0, 50)).toBe(0);
+    expect(groundHeightFn([])(0, 0)).toBe(0);
+  });
+
+  it("puts the global internet highway on a flyover that starts at ground level", () => {
+    const scene = buildGlobalScene([device("self", "thisHost")], [{ name: "a.example", bytes: 1 }]);
+    const ground = groundHeightFn(scene.model.roads);
+    expect(ground(0, -100)).toBeLessThan(1);
+    expect(ground(0, -600)).toBeGreaterThan(15);
+    const points = scene.route(ev({ host: "a.example" }))!.points;
+    const door = points[points.length - 1]!;
+    expect(ground(door.x, door.y)).toBeGreaterThan(15);
   });
 });
