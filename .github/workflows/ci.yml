@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-22.04, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Linux system libraries (libpcap, WebKitGTK)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libpcap-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+
+      - name: Npcap SDK (link-time only)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/fetch-npcap-sdk.ps1
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      # The Tauri shell embeds the built frontend, so it must exist before the desktop crate compiles.
+      - run: npx vite build
+      - run: cargo test --workspace
+      - run: cargo clippy --workspace --all-targets -- -D warnings
