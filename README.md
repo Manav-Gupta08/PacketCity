@@ -13,7 +13,8 @@ Rust (capture + analysis) · Tauri 2 · React + TypeScript · Three.js (WebGL2)
   mode, plus a clear *capture scope* banner saying what this interface can and cannot see.
 - **Live Traffic (Global city)**: your device, the router interchange, LAN devices (named from
   DHCP/mDNS/LLMNR/NetBIOS, labelled with their manufacturer), the broadcast plaza, the internet
-  gateway, and towers for the busiest remote hosts. Traffic drives between them.
+  gateway on an elevated flyover, and towers for the busiest remote hosts reached by skybridges.
+  Traffic drives between them.
 - **My Traffic**: a two-carriageway highway between your device and the internet: incoming on
   one side, outgoing on the other.
 - **Protocol → vehicle**: HTTPS coupes, TCP/HTTP sedans, UDP compacts, DNS bikes, ICMP
@@ -21,11 +22,13 @@ Rust (capture + analysis) · Tauri 2 · React + TypeScript · Three.js (WebGL2)
 - **Inspector**: packet layers (Ethernet, ARP, IPv4/6, TCP/UDP/ICMP, DNS, DHCP, NetBIOS, TLS
   SNI, HTTP), flow statistics and TCP state, device details, "follow connection".
 - **Connections, Devices, Protocols, Statistics** pages; **Alerts** for port scans, host sweeps,
-  duplicate IPs, new devices, retransmission storms and malformed bursts.
+  brute-force logins (SSH/RDP/VNC/Telnet/FTP), DNS tunnelling, duplicate IPs, new devices,
+  retransmission storms and malformed bursts.
 - **Threat colouring**: packets with hostile signatures (stealth-scan TCP flag sets, LAND packets,
-  known backdoor/RAT ports, or sent by a host currently scanning) are tagged on the wire and drawn
-  as pulsing red vehicles, flagged rows in Connections and a banner in the inspector — all from the
-  same metadata the parser already has, no payload inspection involved.
+  known backdoor/RAT ports, or sent by a host currently scanning or brute-forcing) are drawn as
+  pulsing red vehicles; weaker signals with legitimate look-alikes (random-looking DNS names) are
+  orange. Flagged rows in Connections and a severity banner in the inspector explain why — all
+  from header metadata, no payload inspection involved.
 - **PCAP / PCAPNG replay** with pause, 0.1–100× speed and seek; **export** the packets kept for the
   hex view back out as a standard `.pcap` file.
 - **Hostnames everywhere**: TLS SNI (reassembled across segments), HTTP Host, and DNS-answer
@@ -72,6 +75,17 @@ cargo run -p packetcity-core --example make_fixtures                   # regener
 node scripts/generate-oui.mjs                                          # refresh the MAC vendor table (IEEE)
 ```
 
+### Continuous integration and releases
+
+- `.github/workflows/ci.yml` runs type-checks, frontend and Rust tests and clippy on Windows,
+  Linux (Ubuntu 22.04) and macOS for every push and pull request.
+- `.github/workflows/release.yml` builds the NSIS installer, `.deb` + AppImage and `.dmg` on a
+  `v*` tag (or manually) and attaches them to a draft release. Signing is opt-in through
+  repository secrets: `WINDOWS_CERTIFICATE` (base64 `.pfx`) + `WINDOWS_CERTIFICATE_PASSWORD` for
+  Authenticode, and `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`,
+  `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID` for macOS signing and notarisation. Without them
+  the bundles are built unsigned.
+
 ## Project layout
 
 | Path                   | What it is                                                                                                               |
@@ -86,11 +100,11 @@ node scripts/generate-oui.mjs                                          # refresh
 
 ## Remaining work
 
-- **Linux and macOS**: `core` and `capture` type-check for both, but live capture has not been
-  verified on those systems, and their bundles (AppImage/deb, dmg) must be built there.
-- **Code signing** for the Windows installer.
-- **Elevated road sections**: the city's roads are all at ground level; ramps and flyovers need
-  height support in the road model.
+- **Linux and macOS live capture** has not been tried on real machines yet. CI builds, tests and
+  bundles both, but capturing on a real interface (permissions, interface naming) still needs a
+  manual check on each system.
+- **Code-signing certificates**: the release workflow signs when certificates are provided, but
+  none are configured, so installers are currently unsigned (Windows SmartScreen will warn).
 
 ### Known limitations
 

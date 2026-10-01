@@ -46,7 +46,7 @@ is metadata-only heuristics, not an IDS — see `docs/ARCHITECTURE.md`. Filter w
 | Data | Visual | Mapping |
 | --- | --- | --- |
 | Direction (My Traffic) | Carriageway | Incoming drives from the INTERNET gate toward **YOUR DEVICE**; outgoing drives away. Loopback drives outgoing. Transit is not on the personal highway ("off-map"). |
-| Endpoints (Live Traffic) | Route | Source node → router interchange (roundabout) → destination node. Internet = highway to the gateway arch and globe, your device = beacon tower, LAN devices = facility towers on the LOCAL DEVICES avenue, broadcast/multicast = LAN BROADCAST plaza. Neighbouring devices turn at their shared junction. |
+| Endpoints (Live Traffic) | Route | Source node → router interchange (roundabout) → destination node. Internet = elevated highway (ramping up from the interchange onto a flyover) to the gateway arch and globe, remote-host towers reached by skybridges, your device = beacon tower, LAN devices = facility towers on the LOCAL DEVICES avenue, broadcast/multicast = LAN BROADCAST plaza. Neighbouring devices turn at their shared junction. |
 | Device traffic volume | Building height | log₁₀ of bytes sent + received |
 | Flow | Lane | Hash of flow id picks a lane, so a conversation reads as one stream |
 | Bytes | Length | 14 … 44 ground units, √(log-scale) over 60 B … 64 KiB |

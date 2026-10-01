@@ -123,7 +123,7 @@ Both views share one 3D renderer. The layout and traffic model are pure data
 
 | Module | Role |
 |---|---|
-| `iso/scene.ts` | Scene model (roads, plazas, buildings, signs, flow tints) and `route(event)` contract |
+| `iso/scene.ts` | Scene model (roads, plazas, buildings, signs, flow tints, optional road elevation profiles) and `route(event)` contract; `groundHeightFn` gives the road surface height anywhere |
 | `scenes/globalScene.ts` | City layout from the device list; paths joined at shared junctions |
 | `scenes/personalScene.ts` | Two-carriageway highway; direction → carriageway, flow → lane |
 | `iso/routes.ts` | Right-hand lane offset polylines with mitered corners; sampling with exact heading |
@@ -131,7 +131,7 @@ Both views share one 3D renderer. The layout and traffic model are pure data
 | `three/vehicles.ts` | Procedural cars: extruded side profiles + glass, wheels, lights, merged per model with per-vertex part materials (paint / glass / rubber / chrome / emissive) in one patched `MeshStandardMaterial`; low-poly impostors for LOD |
 | `three/fleet.ts` | Pool → instanced meshes (one draw call per model × LOD), smoothed steering, fade/focus dimming, road light wash (one additive instanced mesh) |
 | `three/buildings.ts` | Landmarks (YOUR DEVICE beacon tower, router control tower with halo rings, internet gateway arch + globe + megatowers, LAN facilities, remote-host spires) and varied decor (setback towers, LED slabs, billboards, data centres, twin towers); background district |
-| `three/roads.ts` | Wet asphalt, lane markings, medians, barriers with light strips, lamp posts with light pools, directional arrows + lane lighting, gantries, roundabout |
+| `three/roads.ts` | Wet asphalt, lane markings, medians, barriers with light strips, lamp posts with light pools, directional arrows + lane lighting, gantries, roundabout; elevated roads are segmented and lifted onto a pillared deck |
 | `three/environment.ts` | Sky gradient, exponential fog, neon PMREM environment map, skyline ring, rain, lights |
 | `three/textures.ts` | Canvas-generated facade (albedo + lit windows), asphalt, wetness, billboard art |
 | `iso/CityRenderer.ts` | WebGL renderer, bloom composer, map controls, landmark-fitting camera search, picking, projected holographic labels, adaptive quality, metrics |
@@ -148,6 +148,12 @@ device/destination change rebuilds just the network city (~60 ms).
 highway, 4 along My Traffic. A shown tower stays while it ranks in the top 2n (hysteresis), and
 the set is name-sorted, so towers don't swap places every second. In the Global city, vehicles
 whose `host` has a tower take that tower's exit instead of driving to the INTERNET gate.
+
+**Elevation**: routes stay 2D. A road may carry an elevation profile (height, ramp-in, ramp-out
+lengths, smoothstep ramps); the renderer lifts every vertex of that road to the profile height at
+its position, and vehicles query `groundHeightFn` each frame for their height and pitch (slope
+sampled ±4 units along the heading). The Global internet highway rises out of the interchange
+onto a flyover over a ground-level cross street; destination exits are level skybridges.
 
 ## Performance & backpressure
 
