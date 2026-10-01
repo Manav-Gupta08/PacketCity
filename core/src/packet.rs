@@ -425,6 +425,7 @@ pub struct PacketRecord {
     pub direction: Direction,
     pub cast: Cast,
     pub class: TrafficClass,
+    pub threat: Option<crate::threats::ThreatKind>,
     #[serde(flatten)]
     pub packet: ParsedPacket,
 }

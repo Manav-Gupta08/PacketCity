@@ -32,6 +32,7 @@ struct Totals {
     bytes_in: u64,
     bytes_out: u64,
     malformed: u64,
+    threats: u64,
     by_class: [u64; CLASS_COUNT],
 }
 
@@ -71,6 +72,8 @@ pub struct StatsSnapshot {
     pub total_bytes_in: u64,
     pub total_bytes_out: u64,
     pub malformed_packets: u64,
+    /// Packets flagged by `threats::ThreatTracker`.
+    pub threat_packets: u64,
     pub class_totals: BTreeMap<TrafficClass, u64>,
     pub class_rates: BTreeMap<TrafficClass, f64>,
     /// Oldest first; one entry per completed second.
@@ -127,6 +130,10 @@ impl TrafficStats {
         self.latest_us
     }
 
+    pub fn record_threat(&mut self) {
+        self.totals.threats += 1;
+    }
+
     /// (packets in, packets out, bytes in, bytes out) since the session started.
     pub fn host_totals(&self) -> (u64, u64, u64, u64) {
         let t = &self.totals;
@@ -168,6 +175,7 @@ impl TrafficStats {
             total_bytes_in: self.totals.bytes_in,
             total_bytes_out: self.totals.bytes_out,
             malformed_packets: self.totals.malformed,
+            threat_packets: self.totals.threats,
             class_totals,
             class_rates,
             history_packets: history.iter().map(|b| b.map_or(0, |b| b.packets)).collect(),

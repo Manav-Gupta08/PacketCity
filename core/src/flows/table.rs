@@ -6,6 +6,7 @@ use super::key::{FlowKey, FlowProtocol};
 use super::tcp::TcpState;
 use crate::packet::{Direction, FlowId, ParsedPacket, TcpFlags, TrafficClass};
 use crate::statistics::EntityCounts;
+use crate::threats::ThreatKind;
 
 const US_PER_SEC: u64 = 1_000_000;
 
@@ -122,6 +123,13 @@ impl FlowTable {
 
     pub fn get(&self, id: FlowId) -> Option<&Flow> {
         self.flows.get(&id)
+    }
+
+    /// Marks the flow hostile; the first reason found is kept.
+    pub fn flag_threat(&mut self, id: FlowId, kind: ThreatKind) {
+        if let Some(f) = self.flows.get_mut(&id) {
+            f.threat.get_or_insert(kind);
+        }
     }
 
     /// Sets an in-band name found outside a single packet (reassembled TLS SNI).

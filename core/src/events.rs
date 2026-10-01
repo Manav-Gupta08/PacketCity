@@ -8,6 +8,7 @@ use serde::Serialize;
 
 use crate::devices::NodeRef;
 use crate::packet::{Cast, Direction, FlowId, PacketId, TrafficClass, TransportProtocol};
+use crate::threats::ThreatKind;
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -33,10 +34,13 @@ pub struct TrafficEvent {
     /// Packets represented by this event (1 unless aggregated).
     pub packets: u32,
     pub bytes: u64,
+    /// Set when any represented packet was flagged; the renderer paints these cars red.
+    pub threat: Option<ThreatKind>,
 }
 
 impl TrafficEvent {
     fn absorb(&mut self, other: TrafficEvent) {
+        self.threat = self.threat.or(other.threat);
         self.packets = self.packets.saturating_add(other.packets);
         self.bytes += other.bytes;
         self.packet_id = other.packet_id;
@@ -147,6 +151,7 @@ mod tests {
             length: 100,
             packets: 1,
             bytes: 100,
+            threat: None,
         }
     }
 

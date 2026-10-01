@@ -21,6 +21,7 @@ pub mod replay;
 pub mod statistics;
 pub mod store;
 pub mod synth;
+pub mod threats;
 
 pub use engine::{Engine, EngineConfig};
 pub use frame::{LinkType, RawFrame};

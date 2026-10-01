@@ -5,6 +5,7 @@ use serde::Serialize;
 use super::key::{Endpoint, FlowKey, NetAddr};
 use super::tcp::TcpTracker;
 use crate::packet::{AppProtocol, Direction, FlowId, ParsedPacket, TcpFlags, TrafficClass};
+use crate::threats::ThreatKind;
 
 const US_PER_SEC: f64 = 1_000_000.0;
 
@@ -40,6 +41,8 @@ pub struct Flow {
     pub bytes_out: u64,
     pub bytes_in: u64,
     pub tcp: Option<TcpTracker>,
+    /// First threat seen on any packet of this flow.
+    pub threat: Option<ThreatKind>,
 }
 
 /// One packet's contribution to a flow.
@@ -76,6 +79,7 @@ impl Flow {
             bytes_out: 0,
             bytes_in: 0,
             tcp: pkt.tcp.as_ref().map(TcpTracker::new),
+            threat: None,
         }
     }
 
@@ -162,6 +166,7 @@ impl Flow {
             packet_rate: if duration_s > 0.0 { packets as f64 / duration_s } else { 0.0 },
             avg_packet_size: if packets > 0 { self.bytes() as f64 / packets as f64 } else { 0.0 },
             tcp: self.tcp.clone(),
+            threat: self.threat,
         }
     }
 }
@@ -228,4 +233,5 @@ pub struct FlowSnapshot {
     pub packet_rate: f64,
     pub avg_packet_size: f64,
     pub tcp: Option<crate::flows::TcpTracker>,
+    pub threat: Option<ThreatKind>,
 }

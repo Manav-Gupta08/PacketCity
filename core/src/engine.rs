@@ -14,6 +14,7 @@ use crate::packet::{PacketId, PacketRecord, ParsedPacket};
 use crate::parser::{classify, parse_frame_with_payload};
 use crate::statistics::{StatsSnapshot, TrafficStats};
 use crate::store::{FrameBytesStore, PacketStore, FRAME_BYTES_CAPACITY};
+use crate::threats::{ThreatKind, ThreatTracker};
 
 /// A flow counts as "active" if it carried a packet within this window.
 pub const ACTIVE_FLOW_WINDOW_US: u64 = 10_000_000;
@@ -68,6 +69,7 @@ pub struct Engine {
     sni: SniReassembler,
     devices: DeviceTable,
     alerts: AlertEngine,
+    threats: ThreatTracker,
     stats: TrafficStats,
     batcher: EventBatcher,
     store: PacketStore,
@@ -86,6 +88,7 @@ impl Engine {
             sni: SniReassembler::default(),
             devices: DeviceTable::new(cfg.local_networks, MAX_DEVICES),
             alerts: AlertEngine::default(),
+            threats: ThreatTracker::default(),
             stats: TrafficStats::default(),
             batcher: EventBatcher::new(cfg.max_events_per_batch, cfg.max_aggregates_per_batch),
             store: PacketStore::new(cfg.packet_store_capacity),
@@ -120,6 +123,13 @@ impl Engine {
         self.devices.learn_names(&packet);
         self.stats.record(ts, packet.wire_len, direction, class, packet.issue.is_some());
         self.update_alerts(&packet, ts);
+        let threat = self.threats.assess(&packet, ts);
+        if let Some(kind) = threat {
+            self.stats.record_threat();
+            if let Some(f) = flow_id {
+                self.flows.flag_threat(f, kind);
+            }
+        }
 
         let host = flow_id
             .and_then(|f| self.flows.get(f))
@@ -144,8 +154,9 @@ impl Engine {
             length: packet.wire_len,
             packets: 1,
             bytes: u64::from(packet.wire_len),
+            threat,
         });
-        self.store.insert(PacketRecord { id, flow_id, timestamp_us: ts, direction, cast, class, packet });
+        self.store.insert(PacketRecord { id, flow_id, timestamp_us: ts, direction, cast, class, threat, packet });
         if let Some(bytes) = self.frame_bytes.as_mut() {
             bytes.insert(id, &frame.data);
         }
@@ -171,11 +182,17 @@ impl Engine {
 
     fn update_alerts(&mut self, packet: &ParsedPacket, ts: u64) {
         let devices = &self.devices;
-        self.alerts.observe_packet(packet, ts, &|ip| devices.is_on_link(ip));
+        if let Some(scanner) = self.alerts.observe_packet(packet, ts, &|ip| devices.is_on_link(ip)) {
+            self.threats.flag(scanner, ThreatKind::Scanner, ts);
+        }
         for event in self.devices.take_events() {
             match event {
                 DeviceEvent::New { node, label, mac } => self.alerts.new_device(ts, &label, mac, node.to_string()),
-                DeviceEvent::DuplicateIp { ip, first, second, node } => self.alerts.duplicate_ip(ts, ip, (first, second), node.to_string()),
+                DeviceEvent::DuplicateIp { ip, first, second, node } => {
+                    // Flagged on the alert only: colouring every subsequent ARP packet from this
+                    // address would paint routine traffic red for minutes after one conflict.
+                    self.alerts.duplicate_ip(ts, ip, (first, second), node.to_string());
+                }
             }
         }
     }
@@ -203,6 +220,7 @@ impl Engine {
             }
         }
         self.alerts.maintain(now_us);
+        self.threats.maintain(now_us);
         self.sni.expire(now_us);
         self.flows.expire(now_us)
     }
@@ -358,6 +376,33 @@ mod tests {
         assert_eq!(e.packet_bytes(on), Some(&f[..]));
         e.set_payload_capture(false);
         assert!(e.packet_bytes(on).is_none(), "disabling discards kept bytes");
+    }
+
+    #[test]
+    fn hostile_packets_are_flagged_everywhere() {
+        let mut e = engine();
+        let backdoor = e.ingest(&frame(synth::tcp_frame(&ep(), 50000, 4444, 1, 0, TcpFlags::SYN, b""), 1_000));
+        let clean = e.ingest(&frame(synth::tcp_frame(&ep(), 50001, 443, 1, 0, TcpFlags::SYN, b""), 2_000));
+        let batch = e.take_batch();
+        assert_eq!(batch.events[0].threat, Some(ThreatKind::BackdoorPort));
+        assert_eq!(batch.events[1].threat, None);
+        assert_eq!(e.packet(backdoor).unwrap().threat, Some(ThreatKind::BackdoorPort));
+        assert_eq!(e.packet(clean).unwrap().threat, None);
+        let flow = e.packet(backdoor).unwrap().flow_id.unwrap();
+        assert_eq!(e.flow(flow).unwrap().threat, Some(ThreatKind::BackdoorPort));
+        assert_eq!(e.stats(3_000).threat_packets, 1);
+    }
+
+    #[test]
+    fn scanner_traffic_turns_red_after_detection() {
+        let mut e = engine();
+        let scanner = Endpoints { src_ip: IpAddr::V4(Ipv4Addr::new(10, 0, 0, 66)), dst_ip: IpAddr::V4(ME), ..ep() };
+        for port in 1..=30u16 {
+            e.ingest(&frame(synth::tcp_frame(&scanner, 40000, port, 1, 0, TcpFlags::SYN, b""), 1_000 + u64::from(port)));
+        }
+        let threats: Vec<_> = e.take_batch().events.iter().map(|ev| ev.threat).collect();
+        assert!(threats[..19].iter().all(Option::is_none), "below the threshold nothing is known yet");
+        assert!(threats[19..].iter().all(|t| *t == Some(ThreatKind::Scanner)));
     }
 
     #[test]

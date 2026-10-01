@@ -106,7 +106,8 @@ impl AlertEngine {
         self.pending.push(Alert { id: self.next_id, timestamp_us: ts, severity: d.severity, kind: d.kind, title: d.title, detail: d.detail, node: d.node, flow_id: d.flow_id });
     }
 
-    pub fn observe_packet(&mut self, pkt: &ParsedPacket, ts: u64, on_link: &dyn Fn(&IpAddr) -> bool) {
+    /// Returns the sender when this packet shows it is currently scanning.
+    pub fn observe_packet(&mut self, pkt: &ParsedPacket, ts: u64, on_link: &dyn Fn(&IpAddr) -> bool) -> Option<IpAddr> {
         self.session_start_us.get_or_insert(ts);
 
         if pkt.issue.is_some() {
@@ -129,9 +130,9 @@ impl AlertEngine {
             }
         }
 
-        let Some((src, dst, port)) = probe(pkt) else { return };
+        let (src, dst, port) = probe(pkt)?;
         if !self.scans.contains_key(&src) && self.scans.len() >= MAX_TRACKED_SOURCES {
-            return;
+            return None;
         }
         let w = self.scans.entry(src).or_default();
         if ts.saturating_sub(w.start_us) > SCAN_WINDOW_US {
@@ -170,6 +171,7 @@ impl AlertEngine {
                 flow_id: None,
             });
         }
+        (port_count >= PORT_SCAN_THRESHOLD || hosts_count >= HOST_SWEEP_THRESHOLD).then_some(src)
     }
 
     pub fn duplicate_ip(&mut self, ts: u64, ip: IpAddr, macs: (MacAddr, MacAddr), node: String) {

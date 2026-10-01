@@ -75,6 +75,7 @@ mod tests {
             direction: Direction::Incoming,
             cast: Cast::Unicast,
             class: TrafficClass::Other,
+            threat: None,
             packet: ParsedPacket::empty(0, 0),
         }
     }
