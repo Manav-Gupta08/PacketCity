@@ -39,6 +39,8 @@ const DEMO_PREFIX: u8 = 24;
 const DEMO_SCANNER: (Ipv4Addr, u8) = (Ipv4Addr::new(192, 0, 2, 66), 0x66);
 const DEMO_C2: Ipv4Addr = Ipv4Addr::new(198, 51, 100, 66);
 const SCAN_BURST: u16 = 24;
+/// SSH connection attempts per brute-force step; a few steps a minute cross the alert threshold.
+const BRUTE_BURST: usize = 4;
 const TICK: Duration = Duration::from_millis(10);
 const MSS: usize = 1400;
 
@@ -186,7 +188,7 @@ impl DemoGenerator {
 
     /// Rare attack-like traffic so the threat colouring can be seen without a real attacker.
     fn hostile(&mut self, out: &mut Vec<RawFrame>, push: &impl Fn(&mut Vec<RawFrame>, Vec<u8>)) {
-        match self.rng.below(3) {
+        match self.rng.below(5) {
             0 => {
                 let (ip, last) = DEMO_SCANNER;
                 let ep = Endpoints { src_mac: peer_mac(last), dst_mac: DEMO_LOCAL_MAC, src_ip: IpAddr::V4(ip), dst_ip: IpAddr::V4(DEMO_LOCAL_IP) };
@@ -199,6 +201,20 @@ impl DemoGenerator {
                 let ep = Self::local_to(DEMO_C2, DEMO_GATEWAY_MAC);
                 push(out, synth::tcp_frame(&ep, 50444, 4444, self.seq, 1, TcpFlags::ACK | TcpFlags::PSH, &[0u8; 180]));
                 push(out, synth::tcp_frame(&ep.reversed(), 4444, 50444, 1, self.seq, TcpFlags::ACK | TcpFlags::PSH, &[0u8; 620]));
+            }
+            2 => {
+                let ep = Self::local_to(DEMO_C2, DEMO_GATEWAY_MAC).reversed();
+                for _ in 0..BRUTE_BURST {
+                    let port = 40000 + self.rng.below(20000) as u16;
+                    push(out, synth::tcp_frame(&ep, port, 22, self.seq, 0, TcpFlags::SYN, b""));
+                }
+            }
+            3 => {
+                const BASE32: &[u8] = b"abcdefghijklmnopqrstuvwxyz234567";
+                let label: String = (0..48).map(|_| char::from(BASE32[self.rng.below(32) as usize])).collect();
+                let ep = Self::local_to(DNS_SERVER, DEMO_GATEWAY_MAC);
+                self.dns_id = self.dns_id.wrapping_add(1);
+                push(out, synth::udp_frame(&ep, 53053, 53, &synth::dns_query(self.dns_id, &format!("{label}.t.exfil.example"), 16)));
             }
             _ => {
                 let ep = Self::local_to(DEMO_C2, DEMO_GATEWAY_MAC).reversed();

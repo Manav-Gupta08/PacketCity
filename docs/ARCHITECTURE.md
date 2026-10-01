@@ -92,8 +92,14 @@ cyberpunk road network. Data correctness comes first; the visualization is a vie
   (randomised) MACs are labelled as such instead of guessed.
 - **Alerts** (`core/src/alerts.rs`): rule-based, over metadata only: port scan (≥20 ports on one
   host in 10 s), host sweep (≥20 on-link hosts on one port), duplicate IP (one IP, two MACs), new
-  device (after a 60 s warm-up), retransmissions (≥10 % of ≥50 packets), malformed burst. Each
+  device (after a 60 s warm-up), retransmissions (≥10 % of ≥50 packets), malformed burst,
+  brute force (≥15 new connections from one source to SSH/Telnet/FTP/RDP/VNC on one host in 60 s;
+  mail, SMB and database ports are excluded because clients pool connections), DNS tunnelling (a
+  query label ≥40 characters with ≥3.6 bits/char entropy). Each
   (rule, subject) pair has a 5-minute cooldown. These are hints, not an IDS.
+- **Threat marking** (`core/src/threats.rs`): per-packet verdict carried on events, packet records
+  and flows (stealth-scan flags, LAND, backdoor ports, DNS-tunnel names, and senders recently
+  flagged as scanners or brute-forcers). The UI paints these vehicles red (orange for DNS tunnels).
 
 ## PCAP replay
 

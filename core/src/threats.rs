@@ -8,7 +8,7 @@ use std::net::IpAddr;
 
 use serde::Serialize;
 
-use crate::packet::{ParsedPacket, TcpFlags, TransportProtocol};
+use crate::packet::{AppProtocol, ParsedPacket, TcpFlags, TransportProtocol};
 
 const US_PER_SEC: u64 = 1_000_000;
 /// A source stays flagged for this long after the last evidence against it.
@@ -28,11 +28,34 @@ pub enum ThreatKind {
     BackdoorPort,
     /// ARP from an address that two MACs claim (possible ARP spoofing).
     ArpSpoof,
+    /// Sender keeps opening connections to a login service (SSH, RDP, …): password guessing.
+    BruteForce,
+    /// DNS name with a long, random-looking label: data smuggled through DNS.
+    DnsTunnel,
 }
 
 /// Ports no ordinary service uses but well-known malware does. None fall in common ephemeral
 /// ranges (Windows 49152+, Linux 32768–60999), so client ports do not trigger false positives.
 const BACKDOOR_PORTS: [u16; 10] = [1337, 2745, 3127, 4444, 5554, 6667, 9996, 12345, 27374, 31337];
+/// Ordinary hostnames rarely have labels this long; encoded payloads (base32/hex) do.
+const TUNNEL_MIN_LABEL: usize = 40;
+/// Bits per character; English-like or word-based labels stay well below this.
+const TUNNEL_MIN_ENTROPY: f64 = 3.6;
+
+/// True for names whose longest label is long and close to uniformly random.
+pub fn looks_like_dns_tunnel(name: &str) -> bool {
+    let Some(label) = name.split('.').max_by_key(|l| l.len()) else { return false };
+    if label.len() < TUNNEL_MIN_LABEL {
+        return false;
+    }
+    let mut counts = [0u32; 256];
+    for b in label.bytes() {
+        counts[usize::from(b.to_ascii_lowercase())] += 1;
+    }
+    let n = label.len() as f64;
+    let entropy: f64 = counts.iter().filter(|&&c| c > 0).map(|&c| f64::from(c) / n).map(|p| -p * p.log2()).sum();
+    entropy >= TUNNEL_MIN_ENTROPY
+}
 
 #[derive(Debug, Default)]
 pub struct ThreatTracker {
@@ -69,6 +92,11 @@ impl ThreatTracker {
         }
         if [pkt.src_port(), pkt.dst_port()].into_iter().flatten().any(|p| BACKDOOR_PORTS.contains(&p)) {
             return Some(ThreatKind::BackdoorPort);
+        }
+        if let Some(name) = pkt.dns.as_ref().filter(|_| pkt.app == AppProtocol::Dns).and_then(|d| d.query_name.as_deref()) {
+            if looks_like_dns_tunnel(name) {
+                return Some(ThreatKind::DnsTunnel);
+            }
         }
         let (since, kind) = *self.flagged.get(&pkt.src_ip()?)?;
         let applies = kind != ThreatKind::ArpSpoof || pkt.arp.is_some();
@@ -124,6 +152,16 @@ mod tests {
         assert_eq!(t.assess(&tcp(A, A, 139, 139, TcpFlags::SYN), 0), Some(ThreatKind::Land));
         assert_eq!(t.assess(&tcp(A, B, 50000, 4444, TcpFlags::SYN), 0), Some(ThreatKind::BackdoorPort));
         assert_eq!(t.assess(&tcp(B, A, 31337, 50000, TcpFlags::ACK), 0), Some(ThreatKind::BackdoorPort));
+    }
+
+    #[test]
+    fn dns_tunnel_names() {
+        assert!(looks_like_dns_tunnel("mfrggzdfmztwq2lknnwg23tpobyxe43uov3ho6dzpjqwe3dfnz2a.t.evil.example"));
+        assert!(looks_like_dns_tunnel("4a7f1c9e0b3d62f85e1a9c7b4d0e2f6a8c1b3e5d7f9a0c2e.cdn.example"));
+        for ok in ["www.google.com", "internal-api-prod-1234567890.us-east-1.elb.amazonaws.com", "_googlecast._tcp.local", ""] {
+            assert!(!looks_like_dns_tunnel(ok), "{ok}");
+        }
+        assert!(!looks_like_dns_tunnel(&"a".repeat(60)), "long but not random");
     }
 
     #[test]

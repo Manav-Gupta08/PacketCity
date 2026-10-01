@@ -129,6 +129,9 @@ impl Engine {
             if let Some(f) = flow_id {
                 self.flows.flag_threat(f, kind);
             }
+            if let (ThreatKind::DnsTunnel, Some(name)) = (kind, packet.dns.as_ref().and_then(|d| d.query_name.as_deref())) {
+                self.alerts.dns_tunnel(ts, name, flow_id);
+            }
         }
 
         let host = flow_id
@@ -197,8 +200,8 @@ impl Engine {
 
     fn update_alerts(&mut self, packet: &ParsedPacket, ts: u64) {
         let devices = &self.devices;
-        if let Some(scanner) = self.alerts.observe_packet(packet, ts, &|ip| devices.is_on_link(ip)) {
-            self.threats.flag(scanner, ThreatKind::Scanner, ts);
+        if let Some((suspect, kind)) = self.alerts.observe_packet(packet, ts, &|ip| devices.is_on_link(ip)) {
+            self.threats.flag(suspect, kind, ts);
         }
         for event in self.devices.take_events() {
             match event {
@@ -418,6 +421,19 @@ mod tests {
         let threats: Vec<_> = e.take_batch().events.iter().map(|ev| ev.threat).collect();
         assert!(threats[..19].iter().all(Option::is_none), "below the threshold nothing is known yet");
         assert!(threats[19..].iter().all(|t| *t == Some(ThreatKind::Scanner)));
+    }
+
+    #[test]
+    fn dns_tunnel_queries_are_flagged_and_alerted() {
+        let mut e = engine();
+        let name = "mfrggzdfmztwq2lknnwg23tpobyxe43uov3ho6dzpjqwe3dfnz2a.t.evil.example";
+        let id = e.ingest(&frame(synth::udp_frame(&ep(), 50000, 53, &synth::dns_query(1, name, 16)), 1_000));
+        e.ingest(&frame(synth::udp_frame(&ep(), 50001, 53, &synth::dns_query(2, "www.example.com", 1)), 2_000));
+        assert_eq!(e.packet(id).unwrap().threat, Some(ThreatKind::DnsTunnel));
+        assert_eq!(e.take_batch().events[1].threat, None);
+        let alerts = e.take_alerts();
+        assert_eq!(alerts.len(), 1);
+        assert!(alerts[0].title.contains("evil.example"));
     }
 
     #[test]

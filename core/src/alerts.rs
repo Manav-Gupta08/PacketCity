@@ -8,6 +8,7 @@ use std::net::IpAddr;
 use serde::Serialize;
 
 use crate::packet::{FlowId, MacAddr, ParsedPacket, TcpFlags, TransportProtocol};
+use crate::threats::ThreatKind;
 
 const US_PER_SEC: u64 = 1_000_000;
 /// New-device alerts are suppressed at session start, when every device is "new".
@@ -23,6 +24,12 @@ pub const MALFORMED_THRESHOLD: u64 = 20;
 /// The same alert (same kind and subject) is not repeated within this period.
 pub const ALERT_COOLDOWN_US: u64 = 300 * US_PER_SEC;
 const MAX_TRACKED_SOURCES: usize = 4096;
+pub const BRUTE_FORCE_WINDOW_US: u64 = 60 * US_PER_SEC;
+/// New connections from one source to one login service within the window.
+pub const BRUTE_FORCE_THRESHOLD: u32 = 15;
+/// Interactive login services; mail, SMB and databases are excluded because clients and pools
+/// legitimately open many connections to them.
+const LOGIN_PORTS: [u16; 5] = [21, 22, 23, 3389, 5900];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -40,6 +47,8 @@ pub enum AlertKind {
     HostSweep,
     Retransmissions,
     MalformedTraffic,
+    BruteForce,
+    DnsTunnel,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -70,6 +79,8 @@ pub struct AlertEngine {
     last_raised: HashMap<(AlertKind, String), u64>,
     session_start_us: Option<u64>,
     scans: HashMap<IpAddr, ScanWindow>,
+    /// (source, server, port) → (window start, connection attempts).
+    logins: HashMap<(IpAddr, IpAddr, u16), (u64, u32)>,
     malformed_window: (u64, u64),
 }
 
@@ -106,8 +117,8 @@ impl AlertEngine {
         self.pending.push(Alert { id: self.next_id, timestamp_us: ts, severity: d.severity, kind: d.kind, title: d.title, detail: d.detail, node: d.node, flow_id: d.flow_id });
     }
 
-    /// Returns the sender when this packet shows it is currently scanning.
-    pub fn observe_packet(&mut self, pkt: &ParsedPacket, ts: u64, on_link: &dyn Fn(&IpAddr) -> bool) -> Option<IpAddr> {
+    /// Returns the sender and why when this packet shows it is scanning or brute-forcing.
+    pub fn observe_packet(&mut self, pkt: &ParsedPacket, ts: u64, on_link: &dyn Fn(&IpAddr) -> bool) -> Option<(IpAddr, ThreatKind)> {
         self.session_start_us.get_or_insert(ts);
 
         if pkt.issue.is_some() {
@@ -131,8 +142,9 @@ impl AlertEngine {
         }
 
         let (src, dst, port) = probe(pkt)?;
+        let brute = pkt.tcp.is_some() && LOGIN_PORTS.contains(&port) && self.observe_login(src, dst, port, ts);
         if !self.scans.contains_key(&src) && self.scans.len() >= MAX_TRACKED_SOURCES {
-            return None;
+            return brute.then_some((src, ThreatKind::BruteForce));
         }
         let w = self.scans.entry(src).or_default();
         if ts.saturating_sub(w.start_us) > SCAN_WINDOW_US {
@@ -171,7 +183,52 @@ impl AlertEngine {
                 flow_id: None,
             });
         }
-        (port_count >= PORT_SCAN_THRESHOLD || hosts_count >= HOST_SWEEP_THRESHOLD).then_some(src)
+        if port_count >= PORT_SCAN_THRESHOLD || hosts_count >= HOST_SWEEP_THRESHOLD {
+            Some((src, ThreatKind::Scanner))
+        } else {
+            brute.then_some((src, ThreatKind::BruteForce))
+        }
+    }
+
+    /// Counts a connection attempt to a login service; true once it looks like password guessing.
+    fn observe_login(&mut self, src: IpAddr, dst: IpAddr, port: u16, ts: u64) -> bool {
+        let key = (src, dst, port);
+        if !self.logins.contains_key(&key) && self.logins.len() >= MAX_TRACKED_SOURCES {
+            return false;
+        }
+        let (start, count) = self.logins.entry(key).or_insert((ts, 0));
+        if ts.saturating_sub(*start) > BRUTE_FORCE_WINDOW_US {
+            *start = ts;
+            *count = 0;
+        }
+        *count += 1;
+        let count = *count;
+        if count == BRUTE_FORCE_THRESHOLD {
+            self.raise(ts, Draft {
+                severity: Severity::Warning,
+                kind: AlertKind::BruteForce,
+                subject: format!("{src}>{dst}:{port}"),
+                title: format!("Possible brute-force login on {dst}:{port}"),
+                detail: format!("{src} opened {count} connections to the {} service on {dst} within {} s, a pattern typical of password guessing.", service_name(port), BRUTE_FORCE_WINDOW_US / US_PER_SEC),
+                node: None,
+                flow_id: None,
+            });
+        }
+        count >= BRUTE_FORCE_THRESHOLD
+    }
+
+    pub fn dns_tunnel(&mut self, ts: u64, name: &str, flow_id: Option<FlowId>) {
+        let labels: Vec<&str> = name.trim_end_matches('.').rsplit('.').take(2).collect();
+        let base = labels.into_iter().rev().collect::<Vec<_>>().join(".");
+        self.raise(ts, Draft {
+            severity: Severity::Warning,
+            kind: AlertKind::DnsTunnel,
+            subject: base.clone(),
+            title: format!("Possible DNS tunnelling via {base}"),
+            detail: format!("DNS names under {base} carry long, random-looking labels (e.g. {name}), which is how data is smuggled through DNS. Some security and telemetry products also do this."),
+            node: None,
+            flow_id,
+        });
     }
 
     pub fn duplicate_ip(&mut self, ts: u64, ip: IpAddr, macs: (MacAddr, MacAddr), node: String) {
@@ -226,6 +283,18 @@ impl AlertEngine {
     /// Drops scan windows that ended long ago so memory stays proportional to active sources.
     pub fn maintain(&mut self, now_us: u64) {
         self.scans.retain(|_, w| now_us.saturating_sub(w.start_us) <= 2 * SCAN_WINDOW_US);
+        self.logins.retain(|_, (start, _)| now_us.saturating_sub(*start) <= 2 * BRUTE_FORCE_WINDOW_US);
+    }
+}
+
+fn service_name(port: u16) -> &'static str {
+    match port {
+        21 => "FTP",
+        22 => "SSH",
+        23 => "Telnet",
+        3389 => "Remote Desktop",
+        5900 => "VNC",
+        _ => "login",
     }
 }
 
@@ -298,6 +367,30 @@ mod tests {
         a.new_device(NEW_DEVICE_WARMUP_US + 1, "10.0.0.9", None, "dev:1".into());
         a.new_device(NEW_DEVICE_WARMUP_US + 2, "10.0.0.9", None, "dev:1".into());
         assert_eq!(a.take().len(), 1);
+    }
+
+    #[test]
+    fn brute_force_on_login_port() {
+        let mut a = AlertEngine::default();
+        let mut verdicts = Vec::new();
+        for i in 0..20u64 {
+            verdicts.push(a.observe_packet(&syn(TARGET, 22), 1_000 + i * US_PER_SEC, &on_link));
+        }
+        assert!(verdicts[..14].iter().all(Option::is_none));
+        assert_eq!(verdicts[14], Some((IpAddr::V4(SCANNER), ThreatKind::BruteForce)));
+        let alerts = a.take();
+        assert_eq!(alerts.len(), 1);
+        assert_eq!(alerts[0].kind, AlertKind::BruteForce);
+        assert!(alerts[0].detail.contains("SSH"));
+    }
+
+    #[test]
+    fn repeated_https_connections_are_not_brute_force() {
+        let mut a = AlertEngine::default();
+        for i in 0..40u64 {
+            assert_eq!(a.observe_packet(&syn(TARGET, 443), 1_000 + i, &on_link), None);
+        }
+        assert!(a.take().is_empty());
     }
 
     #[test]
