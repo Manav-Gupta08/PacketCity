@@ -12,6 +12,8 @@ const KIND_LABEL: Record<Alert["kind"], string> = {
   hostSweep: "Host sweep",
   retransmissions: "Retransmissions",
   malformedTraffic: "Malformed traffic",
+  bruteForce: "Brute force",
+  dnsTunnel: "DNS tunnel",
 };
 
 function focus(a: Alert) {

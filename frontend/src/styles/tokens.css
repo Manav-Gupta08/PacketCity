@@ -21,6 +21,7 @@
   --warn: #ffb020;
   --ok: #3dffb5;
   --threat: #ff1a2e;
+  --threat-medium: #ff7a1a;
 
   --incoming: var(--magenta);
   --outgoing: var(--cyan);

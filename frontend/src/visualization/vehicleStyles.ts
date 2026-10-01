@@ -34,14 +34,22 @@ export const VEHICLE_STYLES: Record<TrafficClass, VehicleStyle> = {
 
 /** Hostile traffic overrides the protocol colour; the model still shows the protocol. */
 export const THREAT_COLOR = 0xff1a2e;
+/** Signals with legitimate look-alikes (telemetry DNS, Wi-Fi extenders) are orange rather than red. */
+export const THREAT_MEDIUM_COLOR = 0xff7a1a;
 
-export const THREAT_LABELS: Record<ThreatKind, { title: string; detail: string }> = {
-  scanner: { title: "Scanner", detail: "The sender was caught port-scanning or sweeping hosts within the last 5 minutes." },
-  stealthScan: { title: "Stealth scan probe", detail: "Illegal TCP flag combination (NULL, FIN, XMAS, SYN+FIN or SYN+RST) used by stealth port scanners." },
-  land: { title: "LAND packet", detail: "Source and destination address and port are identical, a classic denial-of-service trick." },
-  backdoorPort: { title: "Backdoor port", detail: "Uses a port associated with well-known backdoors, RATs or botnet C2 (e.g. 4444, 31337, 6667)." },
-  arpSpoof: { title: "Possible ARP spoofing", detail: "ARP from an address that two different MACs claim." },
+export type ThreatSeverity = "high" | "medium";
+
+export const THREAT_LABELS: Record<ThreatKind, { title: string; detail: string; severity: ThreatSeverity }> = {
+  scanner: { title: "Scanner", severity: "high", detail: "The sender was caught port-scanning or sweeping hosts within the last 5 minutes." },
+  stealthScan: { title: "Stealth scan probe", severity: "high", detail: "Illegal TCP flag combination (NULL, FIN, XMAS, SYN+FIN or SYN+RST) used by stealth port scanners." },
+  land: { title: "LAND packet", severity: "high", detail: "Source and destination address and port are identical, a classic denial-of-service trick." },
+  backdoorPort: { title: "Backdoor port", severity: "high", detail: "Uses a port associated with well-known backdoors, RATs or botnet C2 (e.g. 4444, 31337, 6667)." },
+  bruteForce: { title: "Brute-force login", severity: "high", detail: "The sender keeps opening connections to a login service (SSH, RDP, VNC, Telnet, FTP), typical of password guessing." },
+  dnsTunnel: { title: "Possible DNS tunnel", severity: "medium", detail: "DNS name with a long, random-looking label, how data is smuggled through DNS. Some security and telemetry products look similar." },
+  arpSpoof: { title: "Possible ARP spoofing", severity: "medium", detail: "ARP from an address that two different MACs claim." },
 };
+
+export const threatColor = (kind: ThreatKind): number => (THREAT_LABELS[kind].severity === "high" ? THREAT_COLOR : THREAT_MEDIUM_COLOR);
 
 /** Convoys at least this long (ground units) and carrying several packets drive as haulers. */
 const HAULER_MIN_LENGTH = 30;

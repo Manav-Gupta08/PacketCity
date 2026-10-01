@@ -10,7 +10,7 @@ import { laneFor } from "./iso/scene";
 import { carriagewayFor } from "./lanes";
 import { buildGlobalScene, MAX_DEVICE_BUILDINGS } from "./scenes/globalScene";
 import { buildPersonalScene } from "./scenes/personalScene";
-import { MAX_VEHICLE_LENGTH, MIN_VEHICLE_LENGTH, VEHICLE_STYLES, vehicleLength, vehicleSpeed } from "./vehicleStyles";
+import { MAX_VEHICLE_LENGTH, MIN_VEHICLE_LENGTH, THREAT_COLOR, THREAT_MEDIUM_COLOR, threatColor, VEHICLE_STYLES, vehicleLength, vehicleSpeed } from "./vehicleStyles";
 
 function ev(over: Partial<TrafficEvent> = {}): TrafficEvent {
   return {
@@ -344,5 +344,14 @@ describe("destination towers", () => {
     // "d" was shown and is still within the top 2n, so it stays instead of "b".
     expect(stickyDestinations(["d", "a"], ranked, 2).map((x) => x.name)).toEqual(["a", "d"]);
     expect(stickyDestinations(["e"], ranked, 2).map((x) => x.name)).toEqual(["a", "b"]);
+  });
+});
+
+describe("threat severity", () => {
+  it("paints definite attacks red and look-alike signals orange", () => {
+    expect(threatColor("scanner")).toBe(THREAT_COLOR);
+    expect(threatColor("bruteForce")).toBe(THREAT_COLOR);
+    expect(threatColor("dnsTunnel")).toBe(THREAT_MEDIUM_COLOR);
+    expect(threatColor("arpSpoof")).toBe(THREAT_MEDIUM_COLOR);
   });
 });

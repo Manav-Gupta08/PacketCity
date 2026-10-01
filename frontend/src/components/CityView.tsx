@@ -12,7 +12,7 @@ import { CityRenderer, type HoverInfo } from "../visualization/iso/CityRenderer"
 import { type Scene, type SignSpec } from "../visualization/iso/scene";
 import { buildGlobalScene } from "../visualization/scenes/globalScene";
 import { buildPersonalScene } from "../visualization/scenes/personalScene";
-import { cssColor, THREAT_COLOR, THREAT_LABELS, VEHICLE_STYLES } from "../visualization/vehicleStyles";
+import { cssColor, THREAT_COLOR, THREAT_LABELS, threatColor, VEHICLE_STYLES } from "../visualization/vehicleStyles";
 import { Icon } from "./Icon";
 import { ReplayBar } from "./ReplayBar";
 
@@ -314,7 +314,7 @@ function VehicleTooltip({ info }: { info: HoverInfo }) {
   const ep = (addr: string, port: number | null) => (port === null ? addr : addr.includes(":") ? `[${addr}]:${port}` : `${addr}:${port}`);
   return (
     <div className={`tooltip glass ${e.threat ? "tooltip--threat" : ""}`} style={{ left: info.x + 14, top: info.y + 14 }}>
-      <div className="tooltip__head" style={{ color: cssColor(e.threat ? THREAT_COLOR : style.color) }}>
+      <div className="tooltip__head" style={{ color: cssColor(e.threat ? threatColor(e.threat) : style.color) }}>
         {style.label} · {e.direction.toUpperCase()}
       </div>
       {e.threat && <div className="tooltip__threat">⚠ {THREAT_LABELS[e.threat].title}</div>}

@@ -30,8 +30,14 @@ filter keyword `tcp`/`udp`/`icmp` matches the *transport*, so `tcp` includes HTT
 A packet painted red (`#ff1a2e`, pulsing underglow, wider road glow) has a hostile signature from
 `core/src/threats.rs`: an illegal TCP flag combination used by stealth scanners (NULL/FIN/XMAS,
 SYN+FIN, SYN+RST), a LAND packet (identical source/destination address *and* port), a well-known
-backdoor/RAT/C2 port, or the sender is currently scanning (flagged for 5 minutes after a port scan
-or host sweep alert). The car's model still reflects its protocol; only the colour changes. This
+backdoor/RAT/C2 port, or the sender is currently scanning or brute-forcing a login service
+(flagged for 5 minutes after a port scan, host sweep or brute-force alert).
+
+Orange (`#ff7a1a`, steady glow) marks *medium* signals that have legitimate look-alikes: DNS
+names with a long, random-looking label (DNS tunnelling, but also some security/telemetry
+products). The inspector banner states the severity.
+
+The car's model still reflects its protocol; only the colour changes. This
 is metadata-only heuristics, not an IDS — see `docs/ARCHITECTURE.md`. Filter with `threat` (alias
 `malicious`) in the view filter, or the **Suspicious** legend toggle.
 

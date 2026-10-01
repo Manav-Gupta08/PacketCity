@@ -14,7 +14,7 @@ export const TRAFFIC_CLASSES: readonly TrafficClass[] = [
 ];
 
 /** Why a packet was flagged hostile (core/src/threats.rs). */
-export type ThreatKind = "scanner" | "stealthScan" | "land" | "backdoorPort" | "arpSpoof";
+export type ThreatKind = "scanner" | "stealthScan" | "land" | "backdoorPort" | "arpSpoof" | "bruteForce" | "dnsTunnel";
 
 export interface TrafficEvent {
   packetId: number;
@@ -130,7 +130,7 @@ export interface Alert {
   id: number;
   timestampUs: number;
   severity: "info" | "warning";
-  kind: "duplicateIp" | "newDevice" | "portScan" | "hostSweep" | "retransmissions" | "malformedTraffic";
+  kind: "duplicateIp" | "newDevice" | "portScan" | "hostSweep" | "retransmissions" | "malformedTraffic" | "bruteForce" | "dnsTunnel";
   title: string;
   detail: string;
   node: string | null;

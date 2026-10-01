@@ -4,7 +4,7 @@ import { formatBytes, formatDuration } from "../format";
 import { selectFlow } from "../services/session";
 import { useApp } from "../stores/appStore";
 import type { FlowSnapshot } from "../types";
-import { cssColor, THREAT_COLOR, THREAT_LABELS, VEHICLE_STYLES } from "../visualization/vehicleStyles";
+import { cssColor, THREAT_LABELS, threatColor, VEHICLE_STYLES } from "../visualization/vehicleStyles";
 
 function matches(f: FlowSnapshot, q: string): boolean {
   if (!q) return true;
@@ -54,7 +54,7 @@ export function ConnectionsView() {
               >
                 <td className="mono">{f.threat ? "⚠ " : ""}#{f.id}</td>
                 <td>
-                  <span className="dot" style={{ background: cssColor(f.threat ? THREAT_COLOR : VEHICLE_STYLES[f.class].color) }} />
+                  <span className="dot" style={{ background: cssColor(f.threat ? threatColor(f.threat) : VEHICLE_STYLES[f.class].color) }} />
                   {VEHICLE_STYLES[f.class].label}
                 </td>
                 <td className="mono">{f.initiator}</td>

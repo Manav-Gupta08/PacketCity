@@ -1,7 +1,7 @@
 import * as THREE from "three";
 
 import { ARRIVING, FREE, type RoutePool } from "../iso/RoutePool";
-import { carModelFor, THREAT_COLOR, VEHICLE_STYLES, type CarModel } from "../vehicleStyles";
+import { carModelFor, THREAT_COLOR, THREAT_LABELS, THREAT_MEDIUM_COLOR, VEHICLE_STYLES, type CarModel } from "../vehicleStyles";
 import { ROAD_Y } from "./roads";
 import { buildCarGeometry, buildCarGeometryLow, carMaterial, glowGeometry, glowMaterialForCars, MODEL_LENGTH, MODEL_WIDTH } from "./vehicles";
 
@@ -39,6 +39,8 @@ export class Fleet {
   private readonly colors = new Map<string, THREE.Color>();
   private readonly threatTint = new THREE.Color(THREAT_COLOR);
   private readonly threatGlow = new THREE.Color(THREAT_COLOR);
+  private readonly mediumTint = new THREE.Color(THREAT_MEDIUM_COLOR);
+  private readonly mediumGlow = new THREE.Color(THREAT_MEDIUM_COLOR);
 
   constructor(private readonly capacity: number, envMap: THREE.Texture | null) {
     const material = carMaterial(envMap);
@@ -90,6 +92,7 @@ export class Fleet {
     const lod2 = LOD_DISTANCE * LOD_DISTANCE;
     const pulse = 0.5 + 0.5 * Math.sin(time * THREAT_PULSE_HZ * Math.PI * 2);
     this.threatGlow.setHex(THREAT_COLOR).multiplyScalar(1.2 + 1.6 * pulse);
+    this.mediumGlow.setHex(THREAT_MEDIUM_COLOR).multiplyScalar(1.4);
 
     for (let i = 0; i < this.capacity; i++) {
       if (pool.state[i] === FREE) continue;
@@ -120,7 +123,8 @@ export class Fleet {
       const n = mm.count++;
       mm.mesh.setMatrixAt(n, this.m4);
       const threat = ev.threat != null;
-      const tint = threat ? this.threatTint : this.tint(ev.class, VEHICLE_STYLES[ev.class].color);
+      const high = threat && THREAT_LABELS[ev.threat!].severity === "high";
+      const tint = !threat ? this.tint(ev.class, VEHICLE_STYLES[ev.class].color) : high ? this.threatTint : this.mediumTint;
       mm.mesh.setColorAt(n, tint);
       const fade = pool.state[i] === ARRIVING ? pool.alpha[i]! : Math.max(0.15, pool.alpha[i]!);
       const dim = fade * (focusFlowId !== null && ev.flowId !== focusFlowId ? UNFOCUSED_DIM : 1);
@@ -130,7 +134,7 @@ export class Fleet {
       this.s.set(len * (threat ? 1.15 : 1), 1, MODEL_WIDTH[model] * sw * spread);
       this.m4.compose(this.p.setY(0), this.q, this.s);
       this.glow.setMatrixAt(glowN, this.m4);
-      this.glow.setColorAt(glowN, threat ? this.threatGlow : tint);
+      this.glow.setColorAt(glowN, !threat ? tint : high ? this.threatGlow : this.mediumGlow);
       this.glowDim.setX(glowN, dim);
       glowN++;
       if (selectedPacketId !== null && ev.packetId === selectedPacketId) selected = i;

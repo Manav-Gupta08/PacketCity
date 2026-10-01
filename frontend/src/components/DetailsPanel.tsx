@@ -48,10 +48,10 @@ const Badge = ({ cls }: { cls: PacketRecord["class"] }) => (
 function ThreatBanner({ kind, scope }: { kind: ThreatKind; scope: "packet" | "connection" }) {
   const t = THREAT_LABELS[kind];
   return (
-    <div className="threat-banner" role="status">
+    <div className={`threat-banner threat-banner--${t.severity}`} role="status">
       <Icon name="shield" size={18} />
       <div>
-        <b>Suspicious {scope} · {t.title}</b>
+        <b>Suspicious {scope} · {t.title} <span className="threat-banner__sev">{t.severity}</span></b>
         <p>{t.detail}</p>
       </div>
     </div>
