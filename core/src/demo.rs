@@ -35,6 +35,10 @@ const LAN_PEERS: [(Ipv4Addr, u8); 4] = [
     (Ipv4Addr::new(192, 0, 2, 50), 0x50),
 ];
 const DEMO_PREFIX: u8 = 24;
+/// Hostile actors for the threat-marking showcase: a LAN scanner and an internet C2 host.
+const DEMO_SCANNER: (Ipv4Addr, u8) = (Ipv4Addr::new(192, 0, 2, 66), 0x66);
+const DEMO_C2: Ipv4Addr = Ipv4Addr::new(198, 51, 100, 66);
+const SCAN_BURST: u16 = 24;
 const TICK: Duration = Duration::from_millis(10);
 const MSS: usize = 1400;
 
@@ -143,7 +147,7 @@ impl DemoGenerator {
             push(out, synth::tcp_frame(&ep, 51080, 80, self.seq, 1, TcpFlags::ACK | TcpFlags::PSH, &synth::http_get(REMOTES[4].1, "/manifest.json")));
             push(out, synth::tcp_frame(&ep.reversed(), 80, 51080, 1, self.seq, TcpFlags::ACK | TcpFlags::PSH, b"HTTP/1.1 200 OK\r\nContent-Length: 512\r\n\r\n"));
         } else {
-            match self.rng.below(4) {
+            match self.rng.below(5) {
                 0 => {
                     let (ip, last) = LAN_PEERS[0];
                     let ep = Self::local_to(ip, peer_mac(last));
@@ -165,7 +169,7 @@ impl DemoGenerator {
                     };
                     push(out, synth::udp_frame(&ep, 5353, 5353, &synth::dns_query(0, "_googlecast._tcp.local", 12)));
                 }
-                _ => {
+                3 => {
                     let (ip, last) = LAN_PEERS[2];
                     let ep = Endpoints {
                         src_mac: peer_mac(last),
@@ -175,6 +179,30 @@ impl DemoGenerator {
                     };
                     push(out, synth::udp_frame(&ep, 50000, 1900, b"M-SEARCH * HTTP/1.1\r\n\r\n"));
                 }
+                _ => self.hostile(out, &push),
+            }
+        }
+    }
+
+    /// Rare attack-like traffic so the threat colouring can be seen without a real attacker.
+    fn hostile(&mut self, out: &mut Vec<RawFrame>, push: &impl Fn(&mut Vec<RawFrame>, Vec<u8>)) {
+        match self.rng.below(3) {
+            0 => {
+                let (ip, last) = DEMO_SCANNER;
+                let ep = Endpoints { src_mac: peer_mac(last), dst_mac: DEMO_LOCAL_MAC, src_ip: IpAddr::V4(ip), dst_ip: IpAddr::V4(DEMO_LOCAL_IP) };
+                let first = 20 + self.rng.below(1000) as u16;
+                for port in first..first + SCAN_BURST {
+                    push(out, synth::tcp_frame(&ep, 61000, port, self.seq, 0, TcpFlags::SYN, b""));
+                }
+            }
+            1 => {
+                let ep = Self::local_to(DEMO_C2, DEMO_GATEWAY_MAC);
+                push(out, synth::tcp_frame(&ep, 50444, 4444, self.seq, 1, TcpFlags::ACK | TcpFlags::PSH, &[0u8; 180]));
+                push(out, synth::tcp_frame(&ep.reversed(), 4444, 50444, 1, self.seq, TcpFlags::ACK | TcpFlags::PSH, &[0u8; 620]));
+            }
+            _ => {
+                let ep = Self::local_to(DEMO_C2, DEMO_GATEWAY_MAC).reversed();
+                push(out, synth::tcp_frame(&ep, 61001, 80 + self.rng.below(400) as u16, self.seq, 0, TcpFlags::FIN | TcpFlags::PSH | TcpFlags::URG, b""));
             }
         }
     }
@@ -239,5 +267,7 @@ mod tests {
         assert!(devices.iter().filter(|d| d.role == crate::devices::DeviceRole::Lan).count() >= 4);
         assert!(batch.events.iter().any(|e| e.dst_node == crate::devices::NodeRef::Internet));
         assert!(batch.events.iter().any(|e| e.dst_node == crate::devices::NodeRef::Broadcast));
+        assert!(stats.threat_packets > 0, "demo shows hostile traffic");
+        assert!(stats.threat_packets * 10 < stats.total_packets, "but only a little");
     }
 }
