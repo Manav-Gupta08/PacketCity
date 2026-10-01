@@ -378,6 +378,25 @@ code { font-family: var(--font-mono); color: var(--cyan); }
 .pcap-open p { margin: 0; max-width: 560px; }
 .pcap-info { padding: 14px 18px; border: 1px solid var(--line); border-radius: var(--radius); background: rgba(4, 8, 18, 0.4); }
 .pcap-info h4 { margin: 0 0 10px; font-size: 15px; }
+
+/* ---- Threat / malicious traffic --------------------------------------------------------- */
+.legend__sep { height: 1px; margin: 4px 2px; background: var(--line); }
+.legend__item--threat { color: var(--threat); }
+.legend__item--threat.is-on { background: rgba(255, 26, 46, 0.14); border-color: rgba(255, 26, 46, 0.5); }
+.legend__count { margin-left: auto; font-size: 10.5px; color: var(--text-faint); }
+.legend__swatch--threat { box-shadow: 0 0 10px var(--threat); animation: threat-pulse 1.4s ease-in-out infinite; }
+@keyframes threat-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+.tooltip--threat { border-color: rgba(255, 26, 46, 0.55); }
+.tooltip__threat { color: var(--threat); font-weight: 700; font-size: 11px; margin: 2px 0 4px; }
+.threat-banner {
+  display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; margin: 0 0 12px;
+  border: 1px solid rgba(255, 26, 46, 0.5); border-radius: var(--radius-sm); background: rgba(255, 26, 46, 0.1); color: #ffd3d8;
+}
+.threat-banner .icon { color: var(--threat); margin-top: 1px; }
+.threat-banner b { display: block; font-size: 12.5px; color: var(--threat); }
+.threat-banner p { margin: 3px 0 0; font-size: 12px; color: var(--text); }
+tr.is-threat { background: rgba(255, 26, 46, 0.07); }
+tr.is-threat:hover { background: rgba(255, 26, 46, 0.14); }
 .pcap-actions { display: flex; gap: 8px; margin-top: 12px; }
 
 .nav__badge { margin-left: auto; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--alert); color: #fff; font-size: 11px; font-weight: 700; display: grid; place-items: center; }

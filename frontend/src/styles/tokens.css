@@ -20,6 +20,7 @@
   --alert: #ff6a3d;
   --warn: #ffb020;
   --ok: #3dffb5;
+  --threat: #ff1a2e;
 
   --incoming: var(--magenta);
   --outgoing: var(--cyan);

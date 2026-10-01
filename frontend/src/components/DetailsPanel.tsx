@@ -4,9 +4,9 @@ import { formatBytes, formatDuration, formatTimestamp, hex } from "../format";
 import { api, toCommandError } from "../services/ipc";
 import { clearSelection } from "../services/session";
 import { setApp, useApp } from "../stores/appStore";
-import type { DeviceSnapshot, FlowSnapshot, PacketRecord } from "../types";
+import type { DeviceSnapshot, FlowSnapshot, PacketRecord, ThreatKind } from "../types";
 import { internetHostnames } from "../visualization/destinations";
-import { cssColor, VEHICLE_STYLES } from "../visualization/vehicleStyles";
+import { cssColor, THREAT_LABELS, VEHICLE_STYLES } from "../visualization/vehicleStyles";
 import { HexSection } from "./HexView";
 import { Icon } from "./Icon";
 
@@ -45,6 +45,19 @@ const Badge = ({ cls }: { cls: PacketRecord["class"] }) => (
   </span>
 );
 
+function ThreatBanner({ kind, scope }: { kind: ThreatKind; scope: "packet" | "connection" }) {
+  const t = THREAT_LABELS[kind];
+  return (
+    <div className="threat-banner" role="status">
+      <Icon name="shield" size={18} />
+      <div>
+        <b>Suspicious {scope} · {t.title}</b>
+        <p>{t.detail}</p>
+      </div>
+    </div>
+  );
+}
+
 function PacketDetails({ p }: { p: PacketRecord }) {
   const srcPort = p.tcp?.srcPort ?? p.udp?.srcPort;
   const dstPort = p.tcp?.dstPort ?? p.udp?.dstPort;
@@ -54,6 +67,7 @@ function PacketDetails({ p }: { p: PacketRecord }) {
   return (
     <>
       <h3 className="details__title">Packet Details <span className="mono muted">#{p.id}</span></h3>
+      {p.threat && <ThreatBanner kind={p.threat} scope="packet" />}
       <Rows
         rows={[
           ["Time", <span className="mono">{formatTimestamp(p.timestampUs)}</span>],
@@ -201,6 +215,7 @@ function FlowDetails({ f, compact }: { f: FlowSnapshot; compact: boolean }) {
     <div className="details__flow">
       {!compact && <h3 className="details__title">Connection <span className="mono muted">FLOW-{String(f.id).padStart(5, "0")}</span></h3>}
       {compact && <div className="panel-title">CONNECTION · FLOW-{String(f.id).padStart(5, "0")}</div>}
+      {f.threat && <ThreatBanner kind={f.threat} scope="connection" />}
       <Rows
         rows={[
           ["Protocol", <><Badge cls={f.class} /> <span className="muted">{f.protocol}</span></>],

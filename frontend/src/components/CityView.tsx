@@ -12,7 +12,7 @@ import { CityRenderer, type HoverInfo } from "../visualization/iso/CityRenderer"
 import { type Scene, type SignSpec } from "../visualization/iso/scene";
 import { buildGlobalScene } from "../visualization/scenes/globalScene";
 import { buildPersonalScene } from "../visualization/scenes/personalScene";
-import { cssColor, VEHICLE_STYLES } from "../visualization/vehicleStyles";
+import { cssColor, THREAT_COLOR, THREAT_LABELS, VEHICLE_STYLES } from "../visualization/vehicleStyles";
 import { Icon } from "./Icon";
 import { ReplayBar } from "./ReplayBar";
 
@@ -151,6 +151,11 @@ export function CityView({ mode, visible }: { mode: Mode; visible: boolean }) {
     const next = current.includes(term) ? current.filter((t) => t !== term) : [...current, term];
     setApp({ vizFilter: next.join(" ") });
   };
+  const threatOnly = parsedFilter.terms.some((t) => t.key === "threat" && !t.negate);
+  const toggleThreatOnly = () => {
+    const current = getApp().vizFilter.split(/\s+/).filter((t) => t && t !== "threat" && t !== "malicious");
+    setApp({ vizFilter: (threatOnly ? current : [...current, "threat"]).join(" ") });
+  };
 
   return (
     <section className={`city ${session?.source === "replay" ? "city--replay" : ""}`} aria-label={mode === "global" ? "Global network city" : "My traffic highway"}>
@@ -187,6 +192,16 @@ export function CityView({ mode, visible }: { mode: Mode; visible: boolean }) {
             </button>
           );
         })}
+        <div className="legend__sep" />
+        <button
+          className={`legend__item legend__item--threat ${threatOnly ? "is-on" : ""}`}
+          onClick={toggleThreatOnly}
+          title={threatOnly ? "Show all traffic" : "Show only suspicious traffic"}
+        >
+          <i className="legend__swatch legend__swatch--threat" style={{ background: cssColor(THREAT_COLOR) }} />
+          Suspicious
+          {stats && stats.threatPackets > 0 && <span className="legend__count mono">{formatCount(stats.threatPackets)}</span>}
+        </button>
       </div>
 
       <div className="city__toolbar">
@@ -298,10 +313,11 @@ function VehicleTooltip({ info }: { info: HoverInfo }) {
   const style = VEHICLE_STYLES[e.class];
   const ep = (addr: string, port: number | null) => (port === null ? addr : addr.includes(":") ? `[${addr}]:${port}` : `${addr}:${port}`);
   return (
-    <div className="tooltip glass" style={{ left: info.x + 14, top: info.y + 14 }}>
-      <div className="tooltip__head" style={{ color: cssColor(style.color) }}>
+    <div className={`tooltip glass ${e.threat ? "tooltip--threat" : ""}`} style={{ left: info.x + 14, top: info.y + 14 }}>
+      <div className="tooltip__head" style={{ color: cssColor(e.threat ? THREAT_COLOR : style.color) }}>
         {style.label} · {e.direction.toUpperCase()}
       </div>
+      {e.threat && <div className="tooltip__threat">⚠ {THREAT_LABELS[e.threat].title}</div>}
       <div className="mono">{ep(e.src, e.srcPort)}</div>
       <div className="mono">→ {ep(e.dst, e.dstPort)}</div>
       {e.host && <div className="tooltip__host">{e.host}</div>}

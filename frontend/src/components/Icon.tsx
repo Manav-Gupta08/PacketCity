@@ -19,6 +19,7 @@ const PATHS = {
   pause: "M8 5v14M16 5v14",
   play: "M7 5l12 7-12 7z",
   refresh: "M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6",
+  shield: "M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6zM12 8v5M12 16v.01",
 } as const;
 
 export type IconName = keyof typeof PATHS;

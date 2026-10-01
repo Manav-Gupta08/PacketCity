@@ -4,11 +4,11 @@ import { formatBytes, formatDuration } from "../format";
 import { selectFlow } from "../services/session";
 import { useApp } from "../stores/appStore";
 import type { FlowSnapshot } from "../types";
-import { cssColor, VEHICLE_STYLES } from "../visualization/vehicleStyles";
+import { cssColor, THREAT_COLOR, THREAT_LABELS, VEHICLE_STYLES } from "../visualization/vehicleStyles";
 
 function matches(f: FlowSnapshot, q: string): boolean {
   if (!q) return true;
-  const hay = `${f.initiator} ${f.responder} ${f.hostname ?? ""} ${f.protocol} ${f.class} ${f.app} ${f.id}`.toLowerCase();
+  const hay = `${f.initiator} ${f.responder} ${f.hostname ?? ""} ${f.protocol} ${f.class} ${f.app} ${f.id} ${f.threat ? "threat malicious suspicious" : ""}`.toLowerCase();
   return q.split(/\s+/).every((t) => hay.includes(t));
 }
 
@@ -46,10 +46,15 @@ export function ConnectionsView() {
           </thead>
           <tbody>
             {rows.map((f) => (
-              <tr key={f.id} className={f.id === selectedFlow ? "is-selected" : ""} onClick={() => selectFlow(f.id)}>
-                <td className="mono">#{f.id}</td>
+              <tr
+                key={f.id}
+                className={`${f.id === selectedFlow ? "is-selected" : ""} ${f.threat ? "is-threat" : ""}`}
+                onClick={() => selectFlow(f.id)}
+                title={f.threat ? `Suspicious: ${THREAT_LABELS[f.threat].title}` : undefined}
+              >
+                <td className="mono">{f.threat ? "⚠ " : ""}#{f.id}</td>
                 <td>
-                  <span className="dot" style={{ background: cssColor(VEHICLE_STYLES[f.class].color) }} />
+                  <span className="dot" style={{ background: cssColor(f.threat ? THREAT_COLOR : VEHICLE_STYLES[f.class].color) }} />
                   {VEHICLE_STYLES[f.class].label}
                 </td>
                 <td className="mono">{f.initiator}</td>
