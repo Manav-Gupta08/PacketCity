@@ -21,6 +21,20 @@ const ev = (packetId: number, flowId: number | null, bytes = 100): TrafficEvent 
   length: bytes,
   packets: 1,
   bytes,
+  threat: null,
+});
+
+describe("ConvoyStaging threat", () => {
+  it("keeps a convoy hostile once any merged packet was", () => {
+    const s = new ConvoyStaging(10);
+    s.add(ev(1, 5), 0);
+    s.add({ ...ev(2, 5), threat: "scanner" }, 0);
+    s.add(ev(3, 5), 0);
+    const out: TrafficEvent[] = [];
+    s.drain((e) => (out.push(e), true), 10);
+    expect(out).toHaveLength(1);
+    expect(out[0]!.threat).toBe("scanner");
+  });
 });
 
 describe("ConvoyStaging", () => {

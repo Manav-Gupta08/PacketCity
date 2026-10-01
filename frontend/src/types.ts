@@ -13,6 +13,9 @@ export const TRAFFIC_CLASSES: readonly TrafficClass[] = [
   "https", "http", "tcp", "udp", "dns", "icmp", "arp", "dhcp", "other",
 ];
 
+/** Why a packet was flagged hostile (core/src/threats.rs). */
+export type ThreatKind = "scanner" | "stealthScan" | "land" | "backdoorPort" | "arpSpoof";
+
 export interface TrafficEvent {
   packetId: number;
   flowId: number | null;
@@ -32,6 +35,7 @@ export interface TrafficEvent {
   length: number;
   packets: number;
   bytes: number;
+  threat: ThreatKind | null;
 }
 
 export interface TcpTracker {
@@ -65,6 +69,7 @@ export interface FlowSnapshot {
   packetRate: number;
   avgPacketSize: number;
   tcp: TcpTracker | null;
+  threat: ThreatKind | null;
 }
 
 export interface StatsSnapshot {
@@ -78,6 +83,7 @@ export interface StatsSnapshot {
   totalBytesIn: number;
   totalBytesOut: number;
   malformedPackets: number;
+  threatPackets: number;
   classTotals: Record<TrafficClass, number>;
   classRates: Record<TrafficClass, number>;
   historyPackets: number[];
@@ -191,6 +197,7 @@ export interface PacketRecord {
   direction: Direction;
   cast: Cast;
   class: TrafficClass;
+  threat: ThreatKind | null;
   capturedLen: number;
   wireLen: number;
   network: NetworkProtocol;

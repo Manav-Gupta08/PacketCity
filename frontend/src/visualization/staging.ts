@@ -33,6 +33,7 @@ export class ConvoyStaging {
     e.packetId = event.packetId;
     e.timestampUs = event.timestampUs;
     e.length = event.length;
+    e.threat = e.threat ?? event.threat;
     this.merged += event.packets;
   }
 

@@ -1,4 +1,4 @@
-import type { TrafficClass } from "../types";
+import type { ThreatKind, TrafficClass } from "../types";
 
 /**
  * Visual metaphor for each traffic class. Documented in docs/VISUAL_MAPPING.md.
@@ -30,6 +30,17 @@ export const VEHICLE_STYLES: Record<TrafficClass, VehicleStyle> = {
   arp: { label: "ARP", shape: "hex", model: "van", color: 0xffd23f, glow: false, speed: 0.9 },
   dhcp: { label: "DHCP", shape: "van", model: "van", color: 0xd8e1ff, glow: false, speed: 0.85 },
   other: { label: "Other", shape: "compact", model: "compact", color: 0x7d8aa8, glow: false, speed: 1 },
+};
+
+/** Hostile traffic overrides the protocol colour; the model still shows the protocol. */
+export const THREAT_COLOR = 0xff1a2e;
+
+export const THREAT_LABELS: Record<ThreatKind, { title: string; detail: string }> = {
+  scanner: { title: "Scanner", detail: "The sender was caught port-scanning or sweeping hosts within the last 5 minutes." },
+  stealthScan: { title: "Stealth scan probe", detail: "Illegal TCP flag combination (NULL, FIN, XMAS, SYN+FIN or SYN+RST) used by stealth port scanners." },
+  land: { title: "LAND packet", detail: "Source and destination address and port are identical, a classic denial-of-service trick." },
+  backdoorPort: { title: "Backdoor port", detail: "Uses a port associated with well-known backdoors, RATs or botnet C2 (e.g. 4444, 31337, 6667)." },
+  arpSpoof: { title: "Possible ARP spoofing", detail: "ARP from an address that two different MACs claim." },
 };
 
 /** Convoys at least this long (ground units) and carrying several packets drive as haulers. */

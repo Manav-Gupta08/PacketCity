@@ -21,6 +21,7 @@ const ev = (packetId: number): TrafficEvent => ({
   length: 60,
   packets: 1,
   bytes: 60,
+  threat: null,
 });
 
 describe("TrafficBus", () => {

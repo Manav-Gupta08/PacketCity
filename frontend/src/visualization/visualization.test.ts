@@ -31,6 +31,7 @@ function ev(over: Partial<TrafficEvent> = {}): TrafficEvent {
     length: 1200,
     packets: 1,
     bytes: 1200,
+    threat: null,
     ...over,
   };
 }
@@ -56,6 +57,14 @@ function device(node: string, role: DeviceSnapshot["role"], bytes = 1000): Devic
 
 describe("visualization filter", () => {
   const match = (f: string, e: TrafficEvent) => compileFilter(parseFilter(f))(e);
+
+  it("selects hostile traffic with threat / malicious", () => {
+    const bad = ev({ threat: "backdoorPort" });
+    expect(match("threat", bad)).toBe(true);
+    expect(match("malicious", ev())).toBe(false);
+    expect(match("!threat", bad)).toBe(false);
+    expect(match("threat tcp", bad)).toBe(true);
+  });
 
   it("matches everything when empty", () => {
     expect(match("", ev())).toBe(true);

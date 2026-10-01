@@ -7,8 +7,9 @@ import type { TrafficEvent } from "../types";
  *   tcp udp icmp            transport
  *   dns https http arp dhcp traffic class      class:tcp  exact visual class (legend toggles)
  *   port:443  ip:10.0.0.5  ip:192.168.*  host:example  direction:in|out  flow:12
+ *   threat                  packets flagged hostile (alias: malicious)
  */
-type Key = "transport" | "class" | "port" | "ip" | "host" | "direction" | "flow";
+type Key = "transport" | "class" | "port" | "ip" | "host" | "direction" | "flow" | "threat";
 
 interface Term {
   key: Key;
@@ -42,6 +43,7 @@ export function parseFilter(input: string): ParsedFilter {
     if (colon < 0) {
       if (TRANSPORT_WORDS.has(word)) terms.push({ key: "transport", value: word, negate });
       else if (CLASS_WORDS.has(word)) terms.push({ key: "class", value: word, negate });
+      else if (word === "threat" || word === "malicious") terms.push({ key: "threat", value: "", negate });
       else errors.push(`Unknown term "${raw}"`);
       continue;
     }
@@ -86,6 +88,8 @@ function termMatches(t: Term, e: TrafficEvent): boolean {
       return e.direction === t.value;
     case "flow":
       return String(e.flowId) === t.value;
+    case "threat":
+      return e.threat !== null;
   }
 }
 

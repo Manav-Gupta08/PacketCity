@@ -1,7 +1,7 @@
 import * as THREE from "three";
 
 import { ARRIVING, FREE, type RoutePool } from "../iso/RoutePool";
-import { carModelFor, VEHICLE_STYLES, type CarModel } from "../vehicleStyles";
+import { carModelFor, THREAT_COLOR, VEHICLE_STYLES, type CarModel } from "../vehicleStyles";
 import { ROAD_Y } from "./roads";
 import { buildCarGeometry, buildCarGeometryLow, carMaterial, glowGeometry, glowMaterialForCars, MODEL_LENGTH, MODEL_WIDTH } from "./vehicles";
 
@@ -12,6 +12,9 @@ const LOD_DISTANCE = 460;
 const TURN_RATE = 9;
 const MAX_WIDTH_SCALE = 1.25;
 const UNFOCUSED_DIM = 0.16;
+/** Hostile cars get a wider, pulsing road glow so they read as an alarm, not just a colour. */
+const THREAT_GLOW_SPREAD = 1.5;
+const THREAT_PULSE_HZ = 1.6;
 
 interface ModelMesh {
   mesh: THREE.InstancedMesh;
@@ -34,6 +37,8 @@ export class Fleet {
   private readonly s = new THREE.Vector3();
   private readonly up = new THREE.Vector3(0, 1, 0);
   private readonly colors = new Map<string, THREE.Color>();
+  private readonly threatTint = new THREE.Color(THREAT_COLOR);
+  private readonly threatGlow = new THREE.Color(THREAT_COLOR);
 
   constructor(private readonly capacity: number, envMap: THREE.Texture | null) {
     const material = carMaterial(envMap);
@@ -83,6 +88,8 @@ export class Fleet {
     let selected = -1;
     const k = Math.min(1, dt * TURN_RATE);
     const lod2 = LOD_DISTANCE * LOD_DISTANCE;
+    const pulse = 0.5 + 0.5 * Math.sin(time * THREAT_PULSE_HZ * Math.PI * 2);
+    this.threatGlow.setHex(THREAT_COLOR).multiplyScalar(1.2 + 1.6 * pulse);
 
     for (let i = 0; i < this.capacity; i++) {
       if (pool.state[i] === FREE) continue;
@@ -112,16 +119,18 @@ export class Fleet {
       this.m4.compose(this.p, this.q, this.s);
       const n = mm.count++;
       mm.mesh.setMatrixAt(n, this.m4);
-      const tint = this.tint(ev.class, VEHICLE_STYLES[ev.class].color);
+      const threat = ev.threat != null;
+      const tint = threat ? this.threatTint : this.tint(ev.class, VEHICLE_STYLES[ev.class].color);
       mm.mesh.setColorAt(n, tint);
       const fade = pool.state[i] === ARRIVING ? pool.alpha[i]! : Math.max(0.15, pool.alpha[i]!);
       const dim = fade * (focusFlowId !== null && ev.flowId !== focusFlowId ? UNFOCUSED_DIM : 1);
       mm.dim.setX(n, dim);
 
-      this.s.set(len, 1, MODEL_WIDTH[model] * sw);
+      const spread = threat ? THREAT_GLOW_SPREAD : 1;
+      this.s.set(len * (threat ? 1.15 : 1), 1, MODEL_WIDTH[model] * sw * spread);
       this.m4.compose(this.p.setY(0), this.q, this.s);
       this.glow.setMatrixAt(glowN, this.m4);
-      this.glow.setColorAt(glowN, tint);
+      this.glow.setColorAt(glowN, threat ? this.threatGlow : tint);
       this.glowDim.setX(glowN, dim);
       glowN++;
       if (selectedPacketId !== null && ev.packetId === selectedPacketId) selected = i;
