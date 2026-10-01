@@ -22,7 +22,12 @@ Rust (capture + analysis) · Tauri 2 · React + TypeScript · Three.js (WebGL2)
   SNI, HTTP), flow statistics and TCP state, device details, "follow connection".
 - **Connections, Devices, Protocols, Statistics** pages; **Alerts** for port scans, host sweeps,
   duplicate IPs, new devices, retransmission storms and malformed bursts.
-- **PCAP / PCAPNG replay** with pause, 0.1–100× speed and seek.
+- **Threat colouring**: packets with hostile signatures (stealth-scan TCP flag sets, LAND packets,
+  known backdoor/RAT ports, or sent by a host currently scanning) are tagged on the wire and drawn
+  as pulsing red vehicles, flagged rows in Connections and a banner in the inspector — all from the
+  same metadata the parser already has, no payload inspection involved.
+- **PCAP / PCAPNG replay** with pause, 0.1–100× speed and seek; **export** the packets kept for the
+  hex view back out as a standard `.pcap` file.
 - **Hostnames everywhere**: TLS SNI (reassembled across segments), HTTP Host, and DNS-answer
   labels for QUIC and other unnamed flows.
 - **Built for load**: bounded queues end to end, convoy aggregation, instanced rendering with LOD,
@@ -84,7 +89,6 @@ node scripts/generate-oui.mjs                                          # refresh
 - **Linux and macOS**: `core` and `capture` type-check for both, but live capture has not been
   verified on those systems, and their bundles (AppImage/deb, dmg) must be built there.
 - **Code signing** for the Windows installer.
-- **Export to PCAP from the UI** (possible for the opt-in packet-byte ring; not built yet).
 - **Elevated road sections**: the city's roads are all at ground level; ramps and flyovers need
   height support in the road model.
 
